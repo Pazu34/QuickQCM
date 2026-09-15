@@ -30,6 +30,7 @@ from roster_match import load_roster, process_batch, format_batch_report
 import scoring
 import app_config
 import class_store
+import class_archive
 import translations
 from translations import tr
 
@@ -58,6 +59,93 @@ STATUS_KEY_MAP = {
 
 def status_label(status):
     return tr(STATUS_KEY_MAP.get(status, status))
+
+
+def format_note(entry, out_of_20, include_uncertain_suffix=True):
+    """Formats one entry's grade for display/export. Default is the raw
+    fraction (points/max_points, e.g. "8/12") rather than a /20 grade --
+    it shows exactly what was graded without implying every quiz is
+    scaled to 20 points. Ticking "Grade out of 20" (ScanTab.
+    note_out_of_20_var) switches to the equivalent note, still computed
+    by scoring.compute_scores either way."""
+    points = entry.get("points")
+    max_points = entry.get("max_points")
+    if points is None or max_points is None:
+        return "-"
+    if out_of_20:
+        note = entry.get("note")
+        text = f"{note:.2f}/20" if note is not None else "-"
+    else:
+        text = f"{points}/{max_points}"
+    if include_uncertain_suffix and entry.get("incertaines"):
+        text += f" (⚠ {len(entry['incertaines'])})"
+    return text
+
+
+def build_results_csv_rows(report, out_of_20):
+    """Builds (headers, rows) for `report`, in the CSV format used both
+    by the manual "Export results" button and by the automatic per-class
+    archive (see class_archive.save_results) -- kept as a single shared
+    function so the two never drift apart."""
+    max_q = 0
+    for e in report:
+        if e.get("questions"):
+            max_q = max(max_q, max(e["questions"].keys()))
+    has_notes = any(e.get("points") is not None for e in report)
+    headers = ["numero", "eleve", "classe", "statut"]
+    if has_notes:
+        headers += ["note", "questions_incertaines"]
+    headers += [f"Q{q}" for q in range(1, max_q + 1)]
+    rows = []
+    for e in report:
+        row = [e.get("sheet_number", ""), e.get("eleve", ""), e.get("classe", ""),
+               status_label(e.get("status"))]
+        if has_notes:
+            row.append(format_note(e, out_of_20, include_uncertain_suffix=False))
+            row.append(",".join(str(q) for q in e.get("incertaines", [])))
+        questions = e.get("questions", {})
+        for q in range(1, max_q + 1):
+            qres = questions.get(q)
+            row.append(";".join(qres["answers"]) if qres else "")
+        rows.append(row)
+    return headers, rows
+
+
+def write_results_csv(path, headers, rows):
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(headers)
+        w.writerows(rows)
+
+
+# Statuses for which entry["questions"] is a COMPLETE merge (every side of
+# the sheet was found -- only "face_manquante" and "erreur_lecture" have an
+# incomplete or absent "questions" dict, see roster_match.process_batch).
+_COMPLETE_QUESTIONS_STATUSES = {"ok", "feuille_douteuse", "numero_inconnu"}
+
+
+def question_read_progress(entry):
+    """Returns (n_read, n_total) for one result entry, or None if not
+    applicable (missing side / read error, where the total isn't known).
+
+    n_total: total number of questions on the sheet -- detect_modular.
+    analyse() always produces one result row per question index decoded
+    from the configuration barcode (whether that row was read cleanly or
+    not), so len(entry["questions"]) already equals that barcode-encoded
+    total once every side of the sheet has been merged in.
+
+    n_read: number of those rows read WITHOUT any bubble flagged for
+    manual review (a flagged bubble means no reliable separation was
+    found for that particular question -- not necessarily a blank
+    answer)."""
+    if entry.get("status") not in _COMPLETE_QUESTIONS_STATUSES:
+        return None
+    questions = entry.get("questions")
+    if not questions:
+        return None
+    n_total = len(questions)
+    n_read = sum(1 for r in questions.values() if not r.get("flagged"))
+    return n_read, n_total
 
 
 HEADER_TOKENS = {"numero", "numéro", "nom", "classe"}
@@ -210,6 +298,82 @@ def suggest_class_name(roster):
     if classes:
         return Counter(classes).most_common(1)[0][0]
     return ""
+
+
+_UNSAFE_FILENAME_CHARS = '<>:"/\\|?*'
+
+
+def _sanitize_filename_part(text):
+    """Strips characters that Windows forbids in file/folder names, so a
+    class name typed freely by the teacher (e.g. "6°A / SEGPA") can be
+    used as part of an output folder/file name."""
+    cleaned = "".join(ch for ch in text if ch not in _UNSAFE_FILENAME_CHARS).strip()
+    return cleaned or "?"
+
+
+def _parse_pdf_date(meta_str):
+    """Parses a PDF metadata date string (e.g. "D:20260912153000+02'00'")
+    into epoch seconds, or None if absent/unparseable."""
+    if not meta_str or not meta_str.startswith("D:"):
+        return None
+    try:
+        return time.mktime(time.strptime(meta_str[2:16], "%Y%m%d%H%M%S"))
+    except ValueError:
+        return None
+
+
+def extract_scan_date(photo_paths):
+    """Best-effort date the copies were scanned/photographed, read from
+    the source files' own metadata rather than "now": EXIF
+    DateTimeOriginal for a photo taken with a phone/camera, PDF creation
+    date for a page extracted from a scanned PDF (see _add_pdf, which
+    stamps the extracted page images' modification time with that same
+    PDF date so this lookup works uniformly for both cases). Falls back
+    to the file's modification time, then to the current time if nothing
+    at all is available. Returns a time.struct_time."""
+    for path in photo_paths:
+        try:
+            with Image.open(path) as img:
+                exif = img.getexif()
+                raw = exif.get(36867) or exif.get(306)  # DateTimeOriginal, DateTime
+            if raw:
+                return time.strptime(raw.strip(), "%Y:%m:%d %H:%M:%S")
+        except (OSError, ValueError, SyntaxError):
+            pass
+    mtimes = [os.path.getmtime(p) for p in photo_paths if os.path.exists(p)]
+    if mtimes:
+        return time.localtime(min(mtimes))
+    return time.localtime()
+
+
+def dedupe_name(base, existing_names):
+    """Appends "_2", "_3"... to `base` until it's not in `existing_names`,
+    so two things named the same (two runs the same day, or a name the
+    teacher typed by hand) don't collide/overwrite each other."""
+    name = base
+    n = 2
+    while name in existing_names:
+        name = f"{base}_{n}"
+        n += 1
+    return name
+
+
+def suggest_run_classe(roster):
+    """Class name to use for a correction run's archive: the roster's own
+    class if there is one, otherwise a generic translated placeholder."""
+    classe = suggest_class_name(roster) if roster else ""
+    return _sanitize_filename_part(classe) if classe else tr("scan_run_name_no_class")
+
+
+def build_run_name(roster, photo_paths, existing_names=()):
+    """Suggested default name for a correction run's output folder (and
+    the matching default export filename): class name + scan date, e.g.
+    "Correction_6A_2026-09-15", instead of an opaque timestamp -- the
+    teacher can freely edit this suggestion (see ScanTab._on_run)."""
+    classe = suggest_run_classe(roster)
+    date_str = time.strftime("%Y-%m-%d", extract_scan_date(photo_paths))
+    base = f"{tr('scan_run_name_prefix')}_{classe}_{date_str}"
+    return dedupe_name(base, existing_names)
 
 
 # ---------------------------------------------------------------------
@@ -1318,6 +1482,73 @@ class RosterManagerDialog(tk.Toplevel):
         self.destroy()
 
 
+class ArchiveBrowserDialog(tk.Toplevel):
+    """Lets the teacher pick a class then one of its archived corrections
+    (see class_archive.py) and reload it into ScanTab's results window --
+    the "reuse an archived correction" half of the archiving feature (the
+    other half, naming + automatically saving one, happens in
+    ScanTab._on_run)."""
+
+    def __init__(self, master, on_load):
+        super().__init__(master)
+        self.title(tr("arch_title"))
+        self.geometry("480x420")
+        self.on_load = on_load
+        self.transient(master)
+
+        top = ttk.Frame(self, padding=12)
+        top.pack(fill="both", expand=True)
+
+        ttk.Label(top, text=tr("arch_class_label")).pack(anchor="w")
+        self.classe_var = tk.StringVar()
+        self.classe_combo = ttk.Combobox(top, textvariable=self.classe_var, state="readonly")
+        classes = class_archive.list_classes()
+        self.classe_combo["values"] = classes
+        self.classe_combo.pack(fill="x", pady=(0, 10))
+        self.classe_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_corrections())
+
+        ttk.Label(top, text=tr("arch_correction_label")).pack(anchor="w")
+        list_frame = ttk.Frame(top)
+        list_frame.pack(fill="both", expand=True, pady=(0, 10))
+        self.corr_listbox = tk.Listbox(list_frame)
+        self.corr_listbox.pack(side="left", fill="both", expand=True)
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.corr_listbox.yview)
+        scroll.pack(side="right", fill="y")
+        self.corr_listbox.config(yscrollcommand=scroll.set)
+        self.corr_listbox.bind("<Double-1>", lambda e: self._on_load_click())
+
+        if not classes:
+            ttk.Label(top, text=tr("arch_no_class"), foreground="#555555",
+                      wraplength=420, justify="left").pack(anchor="w", pady=(0, 10))
+        else:
+            self.classe_combo.current(0)
+            self._refresh_corrections()
+
+        btn_row = ttk.Frame(top)
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=tr("arch_load_btn"), command=self._on_load_click).pack(side="left")
+        ttk.Button(btn_row, text=tr("btn_close"), command=self.destroy).pack(side="left", padx=5)
+
+    def _refresh_corrections(self):
+        self.corr_listbox.delete(0, "end")
+        for name in class_archive.list_corrections(self.classe_var.get()):
+            self.corr_listbox.insert("end", name)
+
+    def _on_load_click(self):
+        classe = self.classe_var.get()
+        sel = self.corr_listbox.curselection()
+        if not classe or not sel:
+            messagebox.showwarning(APP_TITLE, tr("arch_choose_first"))
+            return
+        run_name = self.corr_listbox.get(sel[0])
+        report = class_archive.load_report_json(classe, run_name)
+        if report is None:
+            messagebox.showerror(APP_TITLE, tr("arch_report_missing"))
+            return
+        self.on_load(report, classe, run_name)
+        self.destroy()
+
+
 # ---------------------------------------------------------------------
 # Tab 2: scanning and grading
 # ---------------------------------------------------------------------
@@ -1329,6 +1560,10 @@ class ScanTab(ttk.Frame):
         self.report = []
         self.answer_key = None
         self.results_win = None
+        self.last_run_name = None
+        self.last_archive_classe = None
+        self.note_out_of_20_var = tk.BooleanVar(value=self.settings.get("note_out_of_20", False))
+        self.save_copies_var = tk.BooleanVar(value=self.settings.get("save_scan_copies", False))
         self._build_ui()
 
     def _build_ui(self):
@@ -1388,6 +1623,13 @@ class ScanTab(ttk.Frame):
         ttk.Entry(row3, textvariable=self.output_dir_var, width=50).pack(side="left", fill="x", expand=True)
         ttk.Button(row3, text=tr("btn_browse"), command=self._browse_output_dir).pack(side="left", padx=5)
 
+        archive_frame = ttk.LabelFrame(top, text=tr("scan_archive_group"), padding=10)
+        archive_frame.pack(fill="x", pady=(0, 8))
+        ttk.Label(archive_frame, text=tr("scan_archive_hint"), foreground="#555555",
+                  wraplength=760, justify="left").pack(anchor="w")
+        ttk.Checkbutton(archive_frame, text=tr("scan_save_copies_checkbox"), variable=self.save_copies_var,
+                         command=self._on_toggle_save_copies).pack(anchor="w", pady=(6, 0))
+
         action_row = ttk.Frame(self)
         action_row.pack(fill="x", pady=6)
         self.run_btn = ttk.Button(action_row, text=tr("scan_btn_run"), command=self._on_run)
@@ -1397,6 +1639,11 @@ class ScanTab(ttk.Frame):
         self.show_results_btn = ttk.Button(action_row, text=tr("scan_btn_show_results"),
                                             command=self._ensure_results_window, state="disabled")
         self.show_results_btn.pack(side="left", padx=5)
+        self.open_class_archive_btn = ttk.Button(action_row, text=tr("scan_open_class_folder"),
+                                                   command=self._open_class_archive_folder, state="disabled")
+        self.open_class_archive_btn.pack(side="left", padx=5)
+        ttk.Button(action_row, text=tr("scan_load_archive_btn"),
+                   command=self._open_archive_browser).pack(side="left", padx=5)
 
         self.status_label = ttk.Label(self, text="", foreground="#555555")
         self.status_label.pack(fill="x", pady=(4, 0))
@@ -1426,16 +1673,18 @@ class ScanTab(ttk.Frame):
         self.export_btn.pack(side="left")
         self.update_csv_btn = ttk.Button(btn_row, text=tr("res_update_csv_btn"), command=self._on_update_csv)
         self.update_csv_btn.pack(side="left", padx=5)
+        ttk.Checkbutton(btn_row, text=tr("res_note_out_of_20"), variable=self.note_out_of_20_var,
+                         command=self._on_toggle_note_mode).pack(side="left", padx=(20, 0))
 
         self.summary_label = ttk.Label(win, text="", foreground="#333333", wraplength=960, justify="left",
                                         padding=(10, 0))
         self.summary_label.pack(fill="x")
 
-        columns = ("numero", "eleve", "classe", "statut", "note")
+        columns = ("numero", "eleve", "classe", "statut", "lues", "note")
         self.tree = ttk.Treeview(win, columns=columns, show="headings", height=20)
         for col, label, width in [("numero", tr("col_number"), 50), ("eleve", tr("col_name"), 180),
                                    ("classe", tr("col_class"), 80), ("statut", tr("col_status"), 130),
-                                   ("note", tr("col_note"), 90)]:
+                                   ("lues", tr("col_read"), 70), ("note", tr("col_note"), 90)]:
             self.tree.heading(col, text=label)
             self.tree.column(col, width=width, anchor="w")
         self.tree.pack(fill="both", expand=True, padx=10, pady=8)
@@ -1445,8 +1694,11 @@ class ScanTab(ttk.Frame):
         self.tree.tag_configure("unknown", background="#fddede")
         self.tree.tag_configure("missing", background="#e4e9f7")
         self.tree.tag_configure("error", background="#f6c6c6")
+        self.tree.tag_configure("read_mismatch", background="#ffcc66")
         ttk.Label(win, text=tr("res_double_click_hint"),
                   foreground="#555555").pack(anchor="w", padx=10, pady=(0, 10))
+        ttk.Label(win, text=tr("res_read_mismatch_hint"), foreground="#8a5a00",
+                  background="#ffcc66", padding=(6, 3)).pack(anchor="w", padx=10, pady=(0, 10))
 
         self._populate_tree()
 
@@ -1530,6 +1782,13 @@ class ScanTab(ttk.Frame):
                 n_pages = doc.page_count
                 if n_pages == 0:
                     raise ValueError(tr("scan_pdf_no_pages"))
+                # Stamp the extracted page images with the PDF's OWN creation
+                # date (rather than "now", when the pages happen to be
+                # extracted) so extract_scan_date() can find a meaningful
+                # scan date for a PDF-imported batch the same way it does
+                # for camera photos (via EXIF).
+                pdf_ts = (_parse_pdf_date(doc.metadata.get("creationDate", ""))
+                          or _parse_pdf_date(doc.metadata.get("modDate", "")))
                 out_dir = tempfile.mkdtemp(prefix="qcm_pdf_")
                 mat = fitz.Matrix(300 / 72, 300 / 72)
                 page_paths = []
@@ -1537,6 +1796,8 @@ class ScanTab(ttk.Frame):
                     pix = doc[i].get_pixmap(matrix=mat)
                     img_path = os.path.join(out_dir, f"page_{i + 1:03d}.png")
                     pix.save(img_path)
+                    if pdf_ts:
+                        os.utime(img_path, (pdf_ts, pdf_ts))
                     page_paths.append(img_path)
             finally:
                 doc.close()
@@ -1585,6 +1846,30 @@ class ScanTab(ttk.Frame):
         if d:
             self.output_dir_var.set(d)
 
+    def _on_toggle_save_copies(self):
+        s = self.settings
+        s["save_scan_copies"] = self.save_copies_var.get()
+        app_config.save_settings(s)
+
+    def _open_class_archive_folder(self):
+        if not self.last_archive_classe:
+            return
+        os.startfile(class_archive.class_dir(self.last_archive_classe))
+
+    def _open_archive_browser(self):
+        ArchiveBrowserDialog(self, on_load=self._on_archive_loaded)
+
+    def _on_archive_loaded(self, report, classe_name, run_name):
+        self.report = report
+        self.last_run_name = run_name
+        self.last_archive_classe = classe_name
+        self.last_run_dir = class_archive.run_dir(classe_name, run_name)
+        self._ensure_results_window()
+        self._populate_tree()
+        self.show_results_btn.config(state="normal")
+        self.open_class_archive_btn.config(state="normal")
+        self.summary_label.config(text=tr("arch_loaded_summary", name=run_name, classe=classe_name, n=len(report)))
+
     # -- Run grading -------------------------------------------
     def _on_run(self):
         photo_paths = list(self.photos_list.get(0, "end"))
@@ -1601,17 +1886,57 @@ class ScanTab(ttk.Frame):
             messagebox.showerror(APP_TITLE, tr("scan_output_dir_error", detail=exc))
             return
 
+        # Captured now (main thread) rather than read from work() later:
+        # tkinter Variables aren't safe to query from a background thread.
+        roster_snapshot = dict(self.roster)
+        out_of_20 = self.note_out_of_20_var.get()
+        save_copies_wanted = self.save_copies_var.get()
+
+        # Ask for a name for this correction -- pre-filled with a
+        # class+date suggestion, editable, so the teacher can label it
+        # something meaningful (e.g. "Controle_chapitre_3") to find again
+        # later via "Charger une correction archivée…". This also
+        # determines the archive folder name and the working output
+        # folder name, so it's decided up front rather than after the
+        # fact.
+        classe_name = suggest_run_classe(roster_snapshot)
+        suggested_name = build_run_name(roster_snapshot, photo_paths)
+        typed_name = simpledialog.askstring(APP_TITLE, tr("scan_ask_run_name"),
+                                             initialvalue=suggested_name, parent=self)
+        if typed_name is None:
+            return
+        base_name = _sanitize_filename_part(typed_name.strip()) if typed_name.strip() else suggested_name
+        existing_names = set()
+        if os.path.isdir(output_dir):
+            existing_names |= set(os.listdir(output_dir))
+        existing_names |= set(class_archive.list_corrections(classe_name))
+        run_name = dedupe_name(base_name, existing_names)
+
         self.run_btn.config(state="disabled")
         self.progress.start(12)
         self._ensure_results_window()
         self.summary_label.config(text=tr("scan_reading_photos", n=len(photo_paths)))
 
         def work():
-            run_dir = os.path.join(output_dir, "correction_" + time.strftime("%Y%m%d_%H%M%S"))
-            report = process_batch(photo_paths, self.roster, run_dir)
+            run_dir = os.path.join(output_dir, run_name)
+            report = process_batch(photo_paths, roster_snapshot, run_dir)
             if self.answer_key:
                 scoring.compute_scores(report, self.answer_key)
-            return report, run_dir
+
+            # Always archive the roster + this run's results under the
+            # app's own portable "Données" folder, independent of
+            # wherever `output_dir` above points -- see class_archive.py.
+            # The scanned copies themselves are only archived (compressed)
+            # if the teacher opted in, since that's the heavy part.
+            if roster_snapshot:
+                class_archive.save_roster(classe_name, roster_snapshot)
+            headers, rows = build_results_csv_rows(report, out_of_20)
+            class_archive.save_results(classe_name, run_name, headers, rows)
+            class_archive.save_report_json(classe_name, run_name, report)
+            if save_copies_wanted:
+                class_archive.save_copies(classe_name, run_name, report)
+
+            return report, run_dir, run_name, classe_name
 
         def on_done(err, result):
             self.progress.stop()
@@ -1621,12 +1946,15 @@ class ScanTab(ttk.Frame):
                 messagebox.showerror(APP_TITLE, tr("scan_failed", detail=exc))
                 self.summary_label.config(text="")
                 return
-            report, run_dir = result
+            report, run_dir, run_name, classe_name = result
             self.report = report
             self.last_run_dir = run_dir
+            self.last_run_name = run_name
+            self.last_archive_classe = classe_name
             self._ensure_results_window()
             self._populate_tree()
             self.show_results_btn.config(state="normal")
+            self.open_class_archive_btn.config(state="normal")
             s = self.settings
             s["scan_csv_path"] = self.csv_path_var.get()
             s["scan_output_dir"] = self.output_dir_var.get()
@@ -1645,15 +1973,22 @@ class ScanTab(ttk.Frame):
             numero = numero if numero is not None else "-"
             eleve = entry.get("eleve", "")
             classe = entry.get("classe", "")
-            note = entry.get("note")
-            note_str = "-"
-            if note is not None:
-                note_str = f"{note:.2f}/20"
-                if entry.get("incertaines"):
-                    note_str += f" (⚠ {len(entry['incertaines'])})"
+            note_str = format_note(entry, self.note_out_of_20_var.get())
+
+            progress = question_read_progress(entry)
+            mismatch = progress is not None and progress[0] != progress[1]
+            lues_str = f"{progress[0]}/{progress[1]}" if progress is not None else "-"
+            tag = "read_mismatch" if mismatch else tag_map.get(status, "error")
+
             self.tree.insert("", "end", iid=str(idx),
-                              values=(numero, eleve, classe, status_label(status), note_str),
-                              tags=(tag_map.get(status, "error"),))
+                              values=(numero, eleve, classe, status_label(status), lues_str, note_str),
+                              tags=(tag,))
+
+    def _on_toggle_note_mode(self):
+        s = self.settings
+        s["note_out_of_20"] = self.note_out_of_20_var.get()
+        app_config.save_settings(s)
+        self._populate_tree()
 
     def _on_row_double_click(self, event):
         sel = self.tree.selection()
@@ -1681,36 +2016,15 @@ class ScanTab(ttk.Frame):
         if not self.report:
             return
         default_dir = getattr(self, "last_run_dir", self.output_dir_var.get())
+        default_name = self.last_run_name or ("resultats_" + time.strftime("%Y%m%d_%H%M%S"))
         path = filedialog.asksaveasfilename(
             title=tr("res_export_title"), initialdir=default_dir,
-            initialfile=f"resultats_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+            initialfile=f"{default_name}.csv",
             defaultextension=".csv", filetypes=[(tr("file_csv"), "*.csv")])
         if not path:
             return
-        max_q = 0
-        for e in self.report:
-            if e.get("questions"):
-                max_q = max(max_q, max(e["questions"].keys()))
-        has_notes = any(e.get("note") is not None for e in self.report)
-        headers = ["numero", "eleve", "classe", "statut"]
-        if has_notes:
-            headers += ["note", "questions_incertaines"]
-        headers += [f"Q{q}" for q in range(1, max_q + 1)]
-        with open(path, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow(headers)
-            for e in self.report:
-                row = [e.get("sheet_number", ""), e.get("eleve", ""), e.get("classe", ""),
-                       status_label(e.get("status"))]
-                if has_notes:
-                    note = e.get("note")
-                    row.append(f"{note:.2f}" if note is not None else "")
-                    row.append(",".join(str(q) for q in e.get("incertaines", [])))
-                questions = e.get("questions", {})
-                for q in range(1, max_q + 1):
-                    qres = questions.get(q)
-                    row.append(";".join(qres["answers"]) if qres else "")
-                w.writerow(row)
+        headers, rows = build_results_csv_rows(self.report, self.note_out_of_20_var.get())
+        write_results_csv(path, headers, rows)
         if messagebox.askyesno(APP_TITLE, tr("res_exported", path=path)):
             os.startfile(path)
 

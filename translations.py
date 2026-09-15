@@ -72,6 +72,7 @@ TRANSLATIONS = {
         "col_name": "Nom",
         "col_class": "Classe",
         "col_status": "Statut",
+        "col_read": "Lues",
         "col_note": "Note",
         "file_csv": "Fichier CSV",
         "file_all": "Tous les fichiers",
@@ -247,6 +248,16 @@ TRANSLATIONS = {
         "scan_key_defined": "Corrigé : défini ({n} question(s) notée(s))",
         "scan_output_group": "3. Dossier de résultats",
         "scan_output_dir_default": "Corrections",
+        "scan_archive_group": "Archivage par classe",
+        "scan_archive_hint": ("Pour chaque correction, les résultats et la liste des élèves sont "
+                               "automatiquement archivés, classe par classe, dans le dossier « Données » de "
+                               "l'application (donc sur la clé USB). Coche la case ci-dessous pour y garder "
+                               "aussi une copie compressée mais lisible de chaque copie scannée (utile pour "
+                               "revérifier plus tard)."),
+        "scan_save_copies_checkbox": "Sauvegarder aussi les copies scannées (compressées)",
+        "scan_open_class_folder": "Ouvrir le dossier de cette classe",
+        "scan_ask_run_name": "Nom de cette correction :",
+        "scan_load_archive_btn": "Charger une correction archivée…",
         "scan_btn_run": "Lancer la correction",
         "scan_btn_show_results": "Voir les résultats…",
         "scan_choose_photos": "Choisir les photos des copies",
@@ -262,17 +273,35 @@ TRANSLATIONS = {
         "scan_output_dir_error": "Impossible d'utiliser ce dossier de résultats : {detail}",
         "scan_reading_photos": "Lecture de {n} photo(s) en cours…",
         "scan_failed": "Échec de la correction :\n\n{detail}",
+        "scan_run_name_prefix": "Correction",
+        "scan_run_name_no_class": "SansClasse",
 
         # --- Fenêtre de résultats ---
         "res_title": "Résultats de la correction",
         "res_export_btn": "Exporter les résultats (CSV)",
         "res_update_csv_btn": "Mettre à jour le CSV classe",
+        "res_note_out_of_20": "Notation sur /20",
         "res_double_click_hint": "Double-clique sur une ligne pour voir/corriger le détail d'une copie.",
+        "res_read_mismatch_hint": ("🟧 Lignes en orange : le nombre de questions lues ne correspond pas au "
+                                    "nombre total de questions de la feuille. Vérifie s'il s'agit bien d'une "
+                                    "question laissée blanche par l'élève, ou d'un problème de lecture (double-"
+                                    "clique pour corriger)."),
         "res_export_title": "Exporter les résultats",
         "res_exported": "Résultats exportés :\n{path}\n\nOuvrir le fichier ?",
         "res_update_csv_title": "Enregistrer le CSV classe",
         "res_csv_save_error": "Impossible d'enregistrer le CSV : {detail}",
         "res_csv_updated": "CSV classe mis à jour : {path}",
+
+        # --- ArchiveBrowserDialog ---
+        "arch_title": "Charger une correction archivée",
+        "arch_class_label": "Classe :",
+        "arch_correction_label": "Correction :",
+        "arch_load_btn": "Charger cette correction",
+        "arch_no_class": "Aucune correction archivée pour l'instant. Lance d'abord une correction.",
+        "arch_choose_first": "Choisis une classe, puis une correction dans la liste.",
+        "arch_report_missing": ("Impossible de charger cette correction : son fichier de données est "
+                                 "introuvable (peut-être supprimé ou déplacé)."),
+        "arch_loaded_summary": "Correction « {name} » (classe {classe}) chargée : {n} copie(s).",
 
         # --- Préférences ---
         "prefs_group": "Langue",
@@ -303,6 +332,7 @@ TRANSLATIONS = {
         "col_name": "Name",
         "col_class": "Class",
         "col_status": "Status",
+        "col_read": "Read",
         "col_note": "Grade",
         "file_csv": "CSV file",
         "file_all": "All files",
@@ -467,6 +497,15 @@ TRANSLATIONS = {
         "scan_key_defined": "Answer key: set ({n} question(s) graded)",
         "scan_output_group": "3. Results folder",
         "scan_output_dir_default": "Grading results",
+        "scan_archive_group": "Class archive",
+        "scan_archive_hint": ("For every grading run, the results and the student list are automatically "
+                               "archived, class by class, in the application's «Données» folder (so on the USB "
+                               "drive). Tick the box below to also keep a compressed but legible copy of every "
+                               "scanned sheet there (handy to double-check later)."),
+        "scan_save_copies_checkbox": "Also save the scanned copies (compressed)",
+        "scan_open_class_folder": "Open this class's folder",
+        "scan_ask_run_name": "Name for this grading run:",
+        "scan_load_archive_btn": "Load an archived correction…",
         "scan_btn_run": "Run grading",
         "scan_btn_show_results": "View results…",
         "scan_choose_photos": "Choose the photos of the copies",
@@ -482,16 +521,33 @@ TRANSLATIONS = {
         "scan_output_dir_error": "Couldn't use this results folder: {detail}",
         "scan_reading_photos": "Reading {n} photo(s)…",
         "scan_failed": "Grading failed:\n\n{detail}",
+        "scan_run_name_prefix": "Grading",
+        "scan_run_name_no_class": "NoClass",
 
         "res_title": "Grading results",
         "res_export_btn": "Export results (CSV)",
         "res_update_csv_btn": "Update class CSV",
+        "res_note_out_of_20": "Grade out of 20",
         "res_double_click_hint": "Double-click a row to view/fix a copy's detail.",
+        "res_read_mismatch_hint": ("🟧 Orange rows: the number of questions read doesn't match the sheet's "
+                                    "total question count. Check whether the student really left that question "
+                                    "blank, or whether it's a reading problem (double-click to fix)."),
         "res_export_title": "Export results",
         "res_exported": "Results exported:\n{path}\n\nOpen the file?",
         "res_update_csv_title": "Save the class CSV",
         "res_csv_save_error": "Couldn't save the CSV: {detail}",
         "res_csv_updated": "Class CSV updated: {path}",
+
+        # --- ArchiveBrowserDialog ---
+        "arch_title": "Load an archived correction",
+        "arch_class_label": "Class:",
+        "arch_correction_label": "Correction:",
+        "arch_load_btn": "Load this correction",
+        "arch_no_class": "No correction archived yet. Run a grading first.",
+        "arch_choose_first": "Choose a class, then a correction from the list.",
+        "arch_report_missing": ("Couldn't load this correction: its data file is missing (maybe deleted or "
+                                 "moved)."),
+        "arch_loaded_summary": "Correction «{name}» (class {classe}) loaded: {n} sheet(s).",
 
         "prefs_group": "Language",
         "prefs_language_label": "Interface language:",
@@ -521,6 +577,7 @@ TRANSLATIONS = {
         "col_name": "Name",
         "col_class": "Klasse",
         "col_status": "Status",
+        "col_read": "Gelesen",
         "col_note": "Note",
         "file_csv": "CSV-Datei",
         "file_all": "Alle Dateien",
@@ -684,6 +741,16 @@ TRANSLATIONS = {
         "scan_key_defined": "Lösung: festgelegt ({n} Frage(n) bewertet)",
         "scan_output_group": "3. Ergebnisordner",
         "scan_output_dir_default": "Korrekturergebnisse",
+        "scan_archive_group": "Klassenarchiv",
+        "scan_archive_hint": ("Bei jeder Korrektur werden die Ergebnisse und die Schülerliste automatisch "
+                               "klassenweise im Ordner „Données“ der Anwendung archiviert (also auf dem "
+                               "USB-Stick). Aktiviere das Kästchen unten, um dort auch eine komprimierte, aber "
+                               "lesbare Kopie jedes gescannten Bogens aufzubewahren (praktisch zum späteren "
+                               "Nachprüfen)."),
+        "scan_save_copies_checkbox": "Auch die gescannten Kopien speichern (komprimiert)",
+        "scan_open_class_folder": "Ordner dieser Klasse öffnen",
+        "scan_ask_run_name": "Name dieser Korrektur:",
+        "scan_load_archive_btn": "Archivierte Korrektur laden…",
         "scan_btn_run": "Korrektur starten",
         "scan_btn_show_results": "Ergebnisse ansehen…",
         "scan_choose_photos": "Fotos der Kopien auswählen",
@@ -699,16 +766,34 @@ TRANSLATIONS = {
         "scan_output_dir_error": "Dieser Ergebnisordner konnte nicht verwendet werden: {detail}",
         "scan_reading_photos": "{n} Foto(s) werden gelesen…",
         "scan_failed": "Korrektur fehlgeschlagen:\n\n{detail}",
+        "scan_run_name_prefix": "Korrektur",
+        "scan_run_name_no_class": "OhneKlasse",
 
         "res_title": "Korrekturergebnisse",
         "res_export_btn": "Ergebnisse exportieren (CSV)",
         "res_update_csv_btn": "Klassen-CSV aktualisieren",
+        "res_note_out_of_20": "Bewertung auf /20",
         "res_double_click_hint": "Doppelklicke eine Zeile, um Details einer Kopie anzusehen/zu korrigieren.",
+        "res_read_mismatch_hint": ("🟧 Orange Zeilen: Die Anzahl der gelesenen Fragen stimmt nicht mit der "
+                                    "Gesamtzahl der Fragen auf dem Bogen überein. Prüfe, ob der Schüler diese "
+                                    "Frage wirklich leer gelassen hat oder ob ein Leseproblem vorliegt "
+                                    "(doppelklicken zum Korrigieren)."),
         "res_export_title": "Ergebnisse exportieren",
         "res_exported": "Ergebnisse exportiert:\n{path}\n\nDatei öffnen?",
         "res_update_csv_title": "Klassen-CSV speichern",
         "res_csv_save_error": "CSV konnte nicht gespeichert werden: {detail}",
         "res_csv_updated": "Klassen-CSV aktualisiert: {path}",
+
+        # --- ArchiveBrowserDialog ---
+        "arch_title": "Archivierte Korrektur laden",
+        "arch_class_label": "Klasse:",
+        "arch_correction_label": "Korrektur:",
+        "arch_load_btn": "Diese Korrektur laden",
+        "arch_no_class": "Noch keine Korrektur archiviert. Starte zuerst eine Korrektur.",
+        "arch_choose_first": "Wähle zuerst eine Klasse, dann eine Korrektur aus der Liste.",
+        "arch_report_missing": ("Diese Korrektur konnte nicht geladen werden: Die Datendatei fehlt (eventuell "
+                                 "gelöscht oder verschoben)."),
+        "arch_loaded_summary": "Korrektur „{name}“ (Klasse {classe}) geladen: {n} Bogen.",
 
         "prefs_group": "Sprache",
         "prefs_language_label": "Sprache der Oberfläche:",
@@ -738,6 +823,7 @@ TRANSLATIONS = {
         "col_name": "Nombre",
         "col_class": "Clase",
         "col_status": "Estado",
+        "col_read": "Leídas",
         "col_note": "Nota",
         "file_csv": "Archivo CSV",
         "file_all": "Todos los archivos",
@@ -902,6 +988,16 @@ TRANSLATIONS = {
         "scan_key_defined": "Solución: definida ({n} pregunta(s) calificada(s))",
         "scan_output_group": "3. Carpeta de resultados",
         "scan_output_dir_default": "Correcciones",
+        "scan_archive_group": "Archivo por clase",
+        "scan_archive_hint": ("En cada corrección, los resultados y la lista de alumnos se archivan "
+                               "automáticamente, clase por clase, en la carpeta «Données» de la aplicación (es "
+                               "decir, en la memoria USB). Marca la casilla de abajo para conservar también allí "
+                               "una copia comprimida pero legible de cada hoja escaneada (útil para volver a "
+                               "comprobarla más tarde)."),
+        "scan_save_copies_checkbox": "Guardar también las copias escaneadas (comprimidas)",
+        "scan_open_class_folder": "Abrir la carpeta de esta clase",
+        "scan_ask_run_name": "Nombre de esta corrección:",
+        "scan_load_archive_btn": "Cargar una corrección archivada…",
         "scan_btn_run": "Iniciar la corrección",
         "scan_btn_show_results": "Ver los resultados…",
         "scan_choose_photos": "Elegir las fotos de las copias",
@@ -917,16 +1013,34 @@ TRANSLATIONS = {
         "scan_output_dir_error": "No se pudo usar esta carpeta de resultados: {detail}",
         "scan_reading_photos": "Leyendo {n} foto(s)…",
         "scan_failed": "Error en la corrección:\n\n{detail}",
+        "scan_run_name_prefix": "Correccion",
+        "scan_run_name_no_class": "SinClase",
 
         "res_title": "Resultados de la corrección",
         "res_export_btn": "Exportar los resultados (CSV)",
         "res_update_csv_btn": "Actualizar el CSV de clase",
+        "res_note_out_of_20": "Calificación sobre /20",
         "res_double_click_hint": "Doble clic en una fila para ver/corregir el detalle de una copia.",
+        "res_read_mismatch_hint": ("🟧 Filas en naranja: el número de preguntas leídas no coincide con el número "
+                                    "total de preguntas de la hoja. Comprueba si el alumno realmente dejó esa "
+                                    "pregunta en blanco o si se trata de un problema de lectura (doble clic para "
+                                    "corregir)."),
         "res_export_title": "Exportar los resultados",
         "res_exported": "Resultados exportados:\n{path}\n\n¿Abrir el archivo?",
         "res_update_csv_title": "Guardar el CSV de clase",
         "res_csv_save_error": "No se pudo guardar el CSV: {detail}",
         "res_csv_updated": "CSV de clase actualizado: {path}",
+
+        # --- ArchiveBrowserDialog ---
+        "arch_title": "Cargar una corrección archivada",
+        "arch_class_label": "Clase:",
+        "arch_correction_label": "Corrección:",
+        "arch_load_btn": "Cargar esta corrección",
+        "arch_no_class": "Todavía no hay ninguna corrección archivada. Inicia primero una corrección.",
+        "arch_choose_first": "Elige una clase y luego una corrección de la lista.",
+        "arch_report_missing": ("No se pudo cargar esta corrección: falta su archivo de datos (quizás se "
+                                 "eliminó o se movió)."),
+        "arch_loaded_summary": "Corrección «{name}» (clase {classe}) cargada: {n} hoja(s).",
 
         "prefs_group": "Idioma",
         "prefs_language_label": "Idioma de la interfaz:",
