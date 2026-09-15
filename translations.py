@@ -58,6 +58,7 @@ TRANSLATIONS = {
         "app_subtitle": "Génération des feuilles-réponses et correction automatique des copies scannées.",
         "tab_generate": "Générer les feuilles",
         "tab_scan": "Scanner / Corriger",
+        "tab_data": "Données enregistrées",
         "tab_preferences": "Préférences",
         "btn_cancel": "Annuler",
         "btn_browse": "Parcourir…",
@@ -68,6 +69,7 @@ TRANSLATIONS = {
         "btn_rename": "Renommer…",
         "btn_load": "Charger",
         "btn_add_row": "+ Ajouter une ligne",
+        "btn_refresh": "Actualiser",
         "col_number": "Numéro",
         "col_name": "Nom",
         "col_class": "Classe",
@@ -176,6 +178,20 @@ TRANSLATIONS = {
         "ak_clear_all": "Tout effacer",
         "ak_question_col": "Question",
         "ak_no_key_confirm": "Aucune bonne réponse cochée : la notation sera désactivée. Continuer ?",
+        "ak_store_group": "Corrigés enregistrés",
+        "ak_store_label": "Corrigé :",
+        "ak_save_as_label": "Enregistrer sous :",
+        "ak_points_col": "Points",
+        "ak_negative_points": "Points négatifs en cas d'erreur (retire le barème de la question)",
+        "ak_partial_credit": ("Points partiels pour une question à choix multiples partiellement "
+                               "correcte (sinon tout ou rien)"),
+        "ak_invalid_points_for": "Barème invalide pour la question {q} (doit être un nombre positif).",
+        "ak_new_name_for": "Nouveau nom pour « {name} » :",
+        "ak_confirm_delete": "Supprimer définitivement le corrigé « {name} » ?",
+        "ak_rename_target_exists": "Un corrigé « {name} » existe déjà — choisis un autre nom.",
+        "ak_no_key_to_save": "Coche au moins une bonne réponse avant d'enregistrer ce corrigé.",
+        "ak_name_required": "Donne un nom à ce corrigé avant de l'enregistrer.",
+        "ak_key_saved": "Corrigé « {name} » enregistré ({n} question(s) notée(s)).",
 
         # --- DetailDialog ---
         "dd_number_label": "n°{num}",
@@ -224,8 +240,10 @@ TRANSLATIONS = {
         "rmd_choose_class_first": "Choisis d'abord une classe dans la liste.",
         "rmd_confirm_replace_table": "Le tableau actuel sera remplacé par la classe chargée. Continuer ?",
         "rmd_new_name_for": "Nouveau nom pour « {name} » :",
-        "rmd_confirm_delete_class": ("Supprimer définitivement la classe « {name} » de la mémoire ?\n"
+        "rmd_confirm_delete_class": ("Supprimer définitivement la classe « {name} » (liste d'élèves ET tout "
+                                      "l'historique de corrections archivé pour cette classe) ?\n"
                                       "(le tableau affiché ici n'est pas effacé)"),
+        "rmd_rename_target_exists": "Une classe « {name} » existe déjà — choisis un autre nom.",
         "rmd_fix_first": "Corrige d'abord :\n\n{errors}",
         "rmd_table_empty": "Le tableau est vide.",
         "rmd_name_required": "Donne un nom à cette classe avant de l'enregistrer.",
@@ -245,15 +263,14 @@ TRANSLATIONS = {
         "scan_clear_list": "Vider la liste",
         "scan_define_key": "Définir le corrigé (facultatif)…",
         "scan_key_undefined": "Corrigé : non défini (pas de notation)",
-        "scan_key_defined": "Corrigé : défini ({n} question(s) notée(s))",
-        "scan_output_group": "3. Dossier de résultats",
-        "scan_output_dir_default": "Corrections",
-        "scan_archive_group": "Archivage par classe",
+        "scan_key_defined": "Corrigé : défini ({n} question(s) notée(s), {total} point(s) au total)",
+        "scan_key_defined_named": "Corrigé « {name} » : {n} question(s) notée(s), {total} point(s) au total",
+        "scan_archive_group": "3. Résultats et archive",
         "scan_archive_hint": ("Pour chaque correction, les résultats et la liste des élèves sont "
                                "automatiquement archivés, classe par classe, dans le dossier « Données » de "
-                               "l'application (donc sur la clé USB). Coche la case ci-dessous pour y garder "
-                               "aussi une copie compressée mais lisible de chaque copie scannée (utile pour "
-                               "revérifier plus tard)."),
+                               "l'application (donc sur la clé USB) — voir l'onglet « Données enregistrées ». "
+                               "Coche la case ci-dessous pour y garder aussi une copie compressée mais lisible "
+                               "de chaque copie scannée (utile pour revérifier plus tard)."),
         "scan_save_copies_checkbox": "Sauvegarder aussi les copies scannées (compressées)",
         "scan_open_class_folder": "Ouvrir le dossier de cette classe",
         "scan_ask_run_name": "Nom de cette correction :",
@@ -267,10 +284,8 @@ TRANSLATIONS = {
         "scan_pdf_no_pages": "Ce PDF ne contient aucune page.",
         "scan_pdf_read_error": "Impossible de lire ce PDF :\n\n{detail}",
         "scan_pdf_extracted": "{n} page(s) extraite(s) de « {name} » et ajoutée(s) à la liste des photos.",
-        "scan_choose_results_dir": "Choisir le dossier de résultats",
         "scan_need_photo": "Ajoute au moins une photo de copie avant de lancer la correction.",
         "scan_no_csv_confirm": "Aucun fichier CSV classe chargé : tous les numéros seront signalés comme inconnus. Continuer ?",
-        "scan_output_dir_error": "Impossible d'utiliser ce dossier de résultats : {detail}",
         "scan_reading_photos": "Lecture de {n} photo(s) en cours…",
         "scan_failed": "Échec de la correction :\n\n{detail}",
         "scan_run_name_prefix": "Correction",
@@ -303,6 +318,23 @@ TRANSLATIONS = {
                                  "introuvable (peut-être supprimé ou déplacé)."),
         "arch_loaded_summary": "Correction « {name} » (classe {classe}) chargée : {n} copie(s).",
 
+        # --- DataTab ---
+        "data_class_label": "Classe :",
+        "data_no_class": ("Aucune classe archivée pour l'instant. Lance une correction (onglet Scanner / "
+                           "Corriger) pour commencer à constituer les données d'une classe."),
+        "data_roster_group": "Élèves",
+        "data_save_roster_btn": "Enregistrer les modifications",
+        "data_roster_saved": "Liste des élèves enregistrée ({n} élève(s)).",
+        "data_corrections_group": "Corrections enregistrées",
+        "data_col_correction": "Correction",
+        "data_col_date": "Date",
+        "data_col_copies": "Copies",
+        "data_col_average": "Moyenne",
+        "data_load_correction_btn": "Charger dans l'onglet Scanner / Corriger",
+        "data_choose_correction_first": "Sélectionne une correction dans la liste.",
+        "data_class_summary": ("{n_students} élève(s) enregistré(s) · {n_corrections} correction(s) archivée(s) "
+                                "· moyenne générale : {overall}"),
+
         # --- Préférences ---
         "prefs_group": "Langue",
         "prefs_language_label": "Langue de l'interface :",
@@ -318,6 +350,7 @@ TRANSLATIONS = {
         "app_subtitle": "Generate answer sheets and automatically grade scanned copies.",
         "tab_generate": "Generate Sheets",
         "tab_scan": "Scan / Grade",
+        "tab_data": "Saved Data",
         "tab_preferences": "Preferences",
         "btn_cancel": "Cancel",
         "btn_browse": "Browse…",
@@ -328,6 +361,7 @@ TRANSLATIONS = {
         "btn_rename": "Rename…",
         "btn_load": "Load",
         "btn_add_row": "+ Add row",
+        "btn_refresh": "Refresh",
         "col_number": "Number",
         "col_name": "Name",
         "col_class": "Class",
@@ -429,6 +463,20 @@ TRANSLATIONS = {
         "ak_clear_all": "Clear all",
         "ak_question_col": "Question",
         "ak_no_key_confirm": "No correct answer checked: grading will be disabled. Continue?",
+        "ak_store_group": "Saved answer keys",
+        "ak_store_label": "Answer key:",
+        "ak_save_as_label": "Save as:",
+        "ak_points_col": "Points",
+        "ak_negative_points": "Negative points on a wrong answer (subtracts that question's points)",
+        "ak_partial_credit": ("Partial credit for a partially-correct multiple-answer question "
+                               "(otherwise all-or-nothing)"),
+        "ak_invalid_points_for": "Invalid point value for question {q} (must be a positive number).",
+        "ak_new_name_for": "New name for «{name}»:",
+        "ak_confirm_delete": "Permanently delete the answer key «{name}»?",
+        "ak_rename_target_exists": "An answer key «{name}» already exists — choose another name.",
+        "ak_no_key_to_save": "Check at least one correct answer before saving this answer key.",
+        "ak_name_required": "Give this answer key a name before saving it.",
+        "ak_key_saved": "Answer key «{name}» saved ({n} question(s) graded).",
 
         "dd_number_label": "#{num}",
         "dd_number_unset": "(number not set)",
@@ -474,8 +522,10 @@ TRANSLATIONS = {
         "rmd_choose_class_first": "Choose a class from the list first.",
         "rmd_confirm_replace_table": "The current table will be replaced by the loaded class. Continue?",
         "rmd_new_name_for": "New name for \u00ab{name}\u00bb:",
-        "rmd_confirm_delete_class": ("Permanently delete the class \u00ab{name}\u00bb from memory?\n"
+        "rmd_confirm_delete_class": ("Permanently delete the class \u00ab{name}\u00bb (student list AND its "
+                                      "whole archived grading history)?\n"
                                       "(the table shown here is not cleared)"),
+        "rmd_rename_target_exists": "A class \u00ab{name}\u00bb already exists \u2014 choose another name.",
         "rmd_fix_first": "Please fix first:\n\n{errors}",
         "rmd_table_empty": "The table is empty.",
         "rmd_name_required": "Give this class a name before saving it.",
@@ -494,14 +544,14 @@ TRANSLATIONS = {
         "scan_clear_list": "Clear list",
         "scan_define_key": "Set the answer key (optional)…",
         "scan_key_undefined": "Answer key: not set (no grading)",
-        "scan_key_defined": "Answer key: set ({n} question(s) graded)",
-        "scan_output_group": "3. Results folder",
-        "scan_output_dir_default": "Grading results",
-        "scan_archive_group": "Class archive",
+        "scan_key_defined": "Answer key: set ({n} question(s) graded, {total} point(s) total)",
+        "scan_key_defined_named": "Answer key «{name}»: {n} question(s) graded, {total} point(s) total",
+        "scan_archive_group": "3. Results and archive",
         "scan_archive_hint": ("For every grading run, the results and the student list are automatically "
                                "archived, class by class, in the application's «Données» folder (so on the USB "
-                               "drive). Tick the box below to also keep a compressed but legible copy of every "
-                               "scanned sheet there (handy to double-check later)."),
+                               "drive) — see the «Saved Data» tab. Tick the box below to also keep "
+                               "a compressed but legible copy of every scanned sheet there (handy to "
+                               "double-check later)."),
         "scan_save_copies_checkbox": "Also save the scanned copies (compressed)",
         "scan_open_class_folder": "Open this class's folder",
         "scan_ask_run_name": "Name for this grading run:",
@@ -515,10 +565,8 @@ TRANSLATIONS = {
         "scan_pdf_no_pages": "This PDF has no pages.",
         "scan_pdf_read_error": "Couldn't read this PDF:\n\n{detail}",
         "scan_pdf_extracted": "{n} page(s) extracted from \u00ab{name}\u00bb and added to the photo list.",
-        "scan_choose_results_dir": "Choose the results folder",
         "scan_need_photo": "Add at least one photo of a copy before running the grading.",
         "scan_no_csv_confirm": "No class CSV loaded: every number will be reported as unknown. Continue?",
-        "scan_output_dir_error": "Couldn't use this results folder: {detail}",
         "scan_reading_photos": "Reading {n} photo(s)…",
         "scan_failed": "Grading failed:\n\n{detail}",
         "scan_run_name_prefix": "Grading",
@@ -549,6 +597,23 @@ TRANSLATIONS = {
                                  "moved)."),
         "arch_loaded_summary": "Correction «{name}» (class {classe}) loaded: {n} sheet(s).",
 
+        # --- DataTab ---
+        "data_class_label": "Class:",
+        "data_no_class": ("No class archived yet. Run a grading (Scan / Grade tab) to start building up a "
+                           "class's data."),
+        "data_roster_group": "Students",
+        "data_save_roster_btn": "Save changes",
+        "data_roster_saved": "Student list saved ({n} student(s)).",
+        "data_corrections_group": "Archived corrections",
+        "data_col_correction": "Correction",
+        "data_col_date": "Date",
+        "data_col_copies": "Sheets",
+        "data_col_average": "Average",
+        "data_load_correction_btn": "Load into the Scan / Grade tab",
+        "data_choose_correction_first": "Choose a correction from the list.",
+        "data_class_summary": ("{n_students} student(s) saved · {n_corrections} correction(s) archived "
+                                "· overall average: {overall}"),
+
         "prefs_group": "Language",
         "prefs_language_label": "Interface language:",
         "prefs_hint": "The language change applies immediately, no need to restart the application.",
@@ -563,6 +628,7 @@ TRANSLATIONS = {
         "app_subtitle": "Antwortbögen erstellen und gescannte Kopien automatisch korrigieren.",
         "tab_generate": "Bögen erstellen",
         "tab_scan": "Scannen / Korrigieren",
+        "tab_data": "Gespeicherte Daten",
         "tab_preferences": "Einstellungen",
         "btn_cancel": "Abbrechen",
         "btn_browse": "Durchsuchen…",
@@ -573,6 +639,7 @@ TRANSLATIONS = {
         "btn_rename": "Umbenennen…",
         "btn_load": "Laden",
         "btn_add_row": "+ Zeile hinzufügen",
+        "btn_refresh": "Aktualisieren",
         "col_number": "Nummer",
         "col_name": "Name",
         "col_class": "Klasse",
@@ -674,6 +741,20 @@ TRANSLATIONS = {
         "ak_clear_all": "Alles löschen",
         "ak_question_col": "Frage",
         "ak_no_key_confirm": "Keine richtige Antwort angekreuzt: Die Bewertung wird deaktiviert. Fortfahren?",
+        "ak_store_group": "Gespeicherte Lösungen",
+        "ak_store_label": "Lösung:",
+        "ak_save_as_label": "Speichern unter:",
+        "ak_points_col": "Punkte",
+        "ak_negative_points": "Negative Punkte bei falscher Antwort (zieht die Punkte dieser Frage ab)",
+        "ak_partial_credit": ("Teilpunkte bei einer teilweise richtigen Mehrfachauswahl-Frage (sonst "
+                               "alles oder nichts)"),
+        "ak_invalid_points_for": "Ungültige Punktzahl für Frage {q} (muss eine positive Zahl sein).",
+        "ak_new_name_for": "Neuer Name für „{name}“:",
+        "ak_confirm_delete": "Lösung „{name}“ endgültig löschen?",
+        "ak_rename_target_exists": "Eine Lösung „{name}“ existiert bereits — wähle einen anderen Namen.",
+        "ak_no_key_to_save": "Kreuze mindestens eine richtige Antwort an, bevor du diese Lösung speicherst.",
+        "ak_name_required": "Gib dieser Lösung einen Namen, bevor du sie speicherst.",
+        "ak_key_saved": "Lösung „{name}“ gespeichert ({n} Frage(n) bewertet).",
 
         "dd_number_label": "Nr. {num}",
         "dd_number_unset": "(keine Nummer angegeben)",
@@ -718,8 +799,10 @@ TRANSLATIONS = {
         "rmd_choose_class_first": "Wähle zuerst eine Klasse aus der Liste.",
         "rmd_confirm_replace_table": "Die aktuelle Tabelle wird durch die geladene Klasse ersetzt. Fortfahren?",
         "rmd_new_name_for": "Neuer Name für „{name}“:",
-        "rmd_confirm_delete_class": ("Klasse „{name}“ endgültig aus dem Speicher löschen?\n"
+        "rmd_confirm_delete_class": ("Klasse „{name}“ endgültig löschen (Schülerliste UND der gesamte "
+                                      "archivierte Korrekturverlauf dieser Klasse)?\n"
                                       "(die hier angezeigte Tabelle wird nicht gelöscht)"),
+        "rmd_rename_target_exists": "Eine Klasse „{name}“ existiert bereits — wähle einen anderen Namen.",
         "rmd_fix_first": "Bitte zuerst korrigieren:\n\n{errors}",
         "rmd_table_empty": "Die Tabelle ist leer.",
         "rmd_name_required": "Gib dieser Klasse einen Namen, bevor du sie speicherst.",
@@ -738,15 +821,14 @@ TRANSLATIONS = {
         "scan_clear_list": "Liste leeren",
         "scan_define_key": "Lösung festlegen (optional)…",
         "scan_key_undefined": "Lösung: nicht festgelegt (keine Bewertung)",
-        "scan_key_defined": "Lösung: festgelegt ({n} Frage(n) bewertet)",
-        "scan_output_group": "3. Ergebnisordner",
-        "scan_output_dir_default": "Korrekturergebnisse",
-        "scan_archive_group": "Klassenarchiv",
+        "scan_key_defined": "Lösung: festgelegt ({n} Frage(n) bewertet, {total} Punkt(e) insgesamt)",
+        "scan_key_defined_named": "Lösung „{name}“: {n} Frage(n) bewertet, {total} Punkt(e) insgesamt",
+        "scan_archive_group": "3. Ergebnisse und Archiv",
         "scan_archive_hint": ("Bei jeder Korrektur werden die Ergebnisse und die Schülerliste automatisch "
                                "klassenweise im Ordner „Données“ der Anwendung archiviert (also auf dem "
-                               "USB-Stick). Aktiviere das Kästchen unten, um dort auch eine komprimierte, aber "
-                               "lesbare Kopie jedes gescannten Bogens aufzubewahren (praktisch zum späteren "
-                               "Nachprüfen)."),
+                               "USB-Stick) — siehe Registerkarte „Gespeicherte Daten“. Aktiviere das Kästchen "
+                               "unten, um dort auch eine komprimierte, aber lesbare Kopie jedes gescannten "
+                               "Bogens aufzubewahren (praktisch zum späteren Nachprüfen)."),
         "scan_save_copies_checkbox": "Auch die gescannten Kopien speichern (komprimiert)",
         "scan_open_class_folder": "Ordner dieser Klasse öffnen",
         "scan_ask_run_name": "Name dieser Korrektur:",
@@ -760,10 +842,8 @@ TRANSLATIONS = {
         "scan_pdf_no_pages": "Dieses PDF enthält keine Seiten.",
         "scan_pdf_read_error": "Dieses PDF konnte nicht gelesen werden:\n\n{detail}",
         "scan_pdf_extracted": "{n} Seite(n) aus „{name}“ extrahiert und zur Fotoliste hinzugefügt.",
-        "scan_choose_results_dir": "Ergebnisordner auswählen",
         "scan_need_photo": "Füge mindestens ein Foto einer Kopie hinzu, bevor du die Korrektur startest.",
         "scan_no_csv_confirm": "Keine Klassen-CSV geladen: Alle Nummern werden als unbekannt gemeldet. Fortfahren?",
-        "scan_output_dir_error": "Dieser Ergebnisordner konnte nicht verwendet werden: {detail}",
         "scan_reading_photos": "{n} Foto(s) werden gelesen…",
         "scan_failed": "Korrektur fehlgeschlagen:\n\n{detail}",
         "scan_run_name_prefix": "Korrektur",
@@ -795,6 +875,23 @@ TRANSLATIONS = {
                                  "gelöscht oder verschoben)."),
         "arch_loaded_summary": "Korrektur „{name}“ (Klasse {classe}) geladen: {n} Bogen.",
 
+        # --- DataTab ---
+        "data_class_label": "Klasse:",
+        "data_no_class": ("Noch keine Klasse archiviert. Starte eine Korrektur (Registerkarte Scannen / "
+                           "Korrigieren), um die Daten einer Klasse aufzubauen."),
+        "data_roster_group": "Schüler",
+        "data_save_roster_btn": "Änderungen speichern",
+        "data_roster_saved": "Schülerliste gespeichert ({n} Schüler).",
+        "data_corrections_group": "Archivierte Korrekturen",
+        "data_col_correction": "Korrektur",
+        "data_col_date": "Datum",
+        "data_col_copies": "Bögen",
+        "data_col_average": "Durchschnitt",
+        "data_load_correction_btn": "In die Registerkarte Scannen / Korrigieren laden",
+        "data_choose_correction_first": "Wähle eine Korrektur aus der Liste.",
+        "data_class_summary": ("{n_students} Schüler gespeichert · {n_corrections} Korrektur(en) "
+                                "archiviert · Gesamtdurchschnitt: {overall}"),
+
         "prefs_group": "Sprache",
         "prefs_language_label": "Sprache der Oberfläche:",
         "prefs_hint": "Der Sprachwechsel wird sofort wirksam, ohne die Anwendung neu zu starten.",
@@ -809,6 +906,7 @@ TRANSLATIONS = {
         "app_subtitle": "Generación de hojas de respuestas y corrección automática de copias escaneadas.",
         "tab_generate": "Generar hojas",
         "tab_scan": "Escanear / Corregir",
+        "tab_data": "Datos guardados",
         "tab_preferences": "Preferencias",
         "btn_cancel": "Cancelar",
         "btn_browse": "Examinar…",
@@ -819,6 +917,7 @@ TRANSLATIONS = {
         "btn_rename": "Renombrar…",
         "btn_load": "Cargar",
         "btn_add_row": "+ Añadir fila",
+        "btn_refresh": "Actualizar",
         "col_number": "Número",
         "col_name": "Nombre",
         "col_class": "Clase",
@@ -920,6 +1019,20 @@ TRANSLATIONS = {
         "ak_clear_all": "Borrar todo",
         "ak_question_col": "Pregunta",
         "ak_no_key_confirm": "Ninguna respuesta correcta marcada: la calificación se desactivará. ¿Continuar?",
+        "ak_store_group": "Soluciones guardadas",
+        "ak_store_label": "Solución:",
+        "ak_save_as_label": "Guardar como:",
+        "ak_points_col": "Puntos",
+        "ak_negative_points": "Puntos negativos en caso de error (resta los puntos de esa pregunta)",
+        "ak_partial_credit": ("Puntos parciales para una pregunta de opción múltiple parcialmente "
+                               "correcta (si no, todo o nada)"),
+        "ak_invalid_points_for": "Puntuación no válida para la pregunta {q} (debe ser un número positivo).",
+        "ak_new_name_for": "Nuevo nombre para «{name}»:",
+        "ak_confirm_delete": "¿Eliminar definitivamente la solución «{name}»?",
+        "ak_rename_target_exists": "Ya existe una solución «{name}» — elige otro nombre.",
+        "ak_no_key_to_save": "Marca al menos una respuesta correcta antes de guardar esta solución.",
+        "ak_name_required": "Dale un nombre a esta solución antes de guardarla.",
+        "ak_key_saved": "Solución «{name}» guardada ({n} pregunta(s) calificada(s)).",
 
         "dd_number_label": "n.º{num}",
         "dd_number_unset": "(número no indicado)",
@@ -965,8 +1078,10 @@ TRANSLATIONS = {
         "rmd_choose_class_first": "Elige primero una clase de la lista.",
         "rmd_confirm_replace_table": "La tabla actual será reemplazada por la clase cargada. ¿Continuar?",
         "rmd_new_name_for": "Nuevo nombre para «{name}»:",
-        "rmd_confirm_delete_class": ("¿Eliminar definitivamente la clase «{name}» de la memoria?\n"
+        "rmd_confirm_delete_class": ("¿Eliminar definitivamente la clase «{name}» (lista de alumnos Y todo el "
+                                      "historial de correcciones archivado de esta clase)?\n"
                                       "(la tabla mostrada aquí no se borra)"),
+        "rmd_rename_target_exists": "Ya existe una clase «{name}» — elige otro nombre.",
         "rmd_fix_first": "Corrige primero:\n\n{errors}",
         "rmd_table_empty": "La tabla está vacía.",
         "rmd_name_required": "Dale un nombre a esta clase antes de guardarla.",
@@ -985,15 +1100,14 @@ TRANSLATIONS = {
         "scan_clear_list": "Vaciar la lista",
         "scan_define_key": "Definir la solución (opcional)…",
         "scan_key_undefined": "Solución: no definida (sin calificación)",
-        "scan_key_defined": "Solución: definida ({n} pregunta(s) calificada(s))",
-        "scan_output_group": "3. Carpeta de resultados",
-        "scan_output_dir_default": "Correcciones",
-        "scan_archive_group": "Archivo por clase",
+        "scan_key_defined": "Solución: definida ({n} pregunta(s) calificada(s), {total} punto(s) en total)",
+        "scan_key_defined_named": "Solución «{name}»: {n} pregunta(s) calificada(s), {total} punto(s) en total",
+        "scan_archive_group": "3. Resultados y archivo",
         "scan_archive_hint": ("En cada corrección, los resultados y la lista de alumnos se archivan "
                                "automáticamente, clase por clase, en la carpeta «Données» de la aplicación (es "
-                               "decir, en la memoria USB). Marca la casilla de abajo para conservar también allí "
-                               "una copia comprimida pero legible de cada hoja escaneada (útil para volver a "
-                               "comprobarla más tarde)."),
+                               "decir, en la memoria USB) — ver la pestaña «Datos guardados». Marca la casilla "
+                               "de abajo para conservar también allí una copia comprimida pero legible de cada "
+                               "hoja escaneada (útil para volver a comprobarla más tarde)."),
         "scan_save_copies_checkbox": "Guardar también las copias escaneadas (comprimidas)",
         "scan_open_class_folder": "Abrir la carpeta de esta clase",
         "scan_ask_run_name": "Nombre de esta corrección:",
@@ -1007,10 +1121,8 @@ TRANSLATIONS = {
         "scan_pdf_no_pages": "Este PDF no contiene ninguna página.",
         "scan_pdf_read_error": "No se pudo leer este PDF:\n\n{detail}",
         "scan_pdf_extracted": "{n} página(s) extraída(s) de «{name}» y añadida(s) a la lista de fotos.",
-        "scan_choose_results_dir": "Elegir la carpeta de resultados",
         "scan_need_photo": "Añade al menos una foto de una copia antes de iniciar la corrección.",
         "scan_no_csv_confirm": "No se cargó ningún CSV de clase: todos los números se marcarán como desconocidos. ¿Continuar?",
-        "scan_output_dir_error": "No se pudo usar esta carpeta de resultados: {detail}",
         "scan_reading_photos": "Leyendo {n} foto(s)…",
         "scan_failed": "Error en la corrección:\n\n{detail}",
         "scan_run_name_prefix": "Correccion",
@@ -1041,6 +1153,23 @@ TRANSLATIONS = {
         "arch_report_missing": ("No se pudo cargar esta corrección: falta su archivo de datos (quizás se "
                                  "eliminó o se movió)."),
         "arch_loaded_summary": "Corrección «{name}» (clase {classe}) cargada: {n} hoja(s).",
+
+        # --- DataTab ---
+        "data_class_label": "Clase:",
+        "data_no_class": ("Todavía no hay ninguna clase archivada. Inicia una corrección (pestaña Escanear / "
+                           "Corregir) para empezar a construir los datos de una clase."),
+        "data_roster_group": "Alumnos",
+        "data_save_roster_btn": "Guardar los cambios",
+        "data_roster_saved": "Lista de alumnos guardada ({n} alumno(s)).",
+        "data_corrections_group": "Correcciones archivadas",
+        "data_col_correction": "Corrección",
+        "data_col_date": "Fecha",
+        "data_col_copies": "Hojas",
+        "data_col_average": "Media",
+        "data_load_correction_btn": "Cargar en la pestaña Escanear / Corregir",
+        "data_choose_correction_first": "Elige una corrección de la lista.",
+        "data_class_summary": ("{n_students} alumno(s) guardado(s) · {n_corrections} corrección/es "
+                                "archivada(s) · media general: {overall}"),
 
         "prefs_group": "Idioma",
         "prefs_language_label": "Idioma de la interfaz:",

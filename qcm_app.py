@@ -29,8 +29,8 @@ from generate_sheet_modular import (
 from roster_match import load_roster, process_batch, format_batch_report
 import scoring
 import app_config
-import class_store
 import class_archive
+import answer_key_store
 import translations
 from translations import tr
 
@@ -61,6 +61,14 @@ def status_label(status):
     return tr(STATUS_KEY_MAP.get(status, status))
 
 
+def _fmt_points(x):
+    """Formats a point value without a trailing ".0" for a whole number
+    (e.g. 1.0 -> "1", 1.5 -> "1.5"), for display in the barème grid and
+    in fraction-mode grades."""
+    x = float(x)
+    return str(int(x)) if x == int(x) else f"{x:g}"
+
+
 def format_note(entry, out_of_20, include_uncertain_suffix=True):
     """Formats one entry's grade for display/export. Default is the raw
     fraction (points/max_points, e.g. "8/12") rather than a /20 grade --
@@ -76,7 +84,7 @@ def format_note(entry, out_of_20, include_uncertain_suffix=True):
         note = entry.get("note")
         text = f"{note:.2f}/20" if note is not None else "-"
     else:
-        text = f"{points}/{max_points}"
+        text = f"{_fmt_points(points)}/{_fmt_points(max_points)}"
     if include_uncertain_suffix and entry.get("incertaines"):
         text += f" (⚠ {len(entry['incertaines'])})"
     return text
@@ -746,10 +754,10 @@ class GenerateTab(ttk.Frame):
         if not name or not name.strip():
             return
         name = name.strip()
-        if name in class_store.list_classes():
+        if name in class_archive.list_classes():
             if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
-        class_store.save_class(name, roster)
+        class_archive.save_roster(name, roster)
         messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
 
     def _browse_output_dir(self):
@@ -913,17 +921,47 @@ class GenerateTab(ttk.Frame):
 # Answer key entry window (optional)
 # ---------------------------------------------------------------------
 class AnswerKeyDialog(tk.Toplevel):
-    def __init__(self, master, n_questions, n_choices, existing_key=None):
+    """Lets the teacher define a corrigé: correct answer(s) AND a
+    per-question point value (barème), plus two grading options that
+    apply to the whole corrigé (negative_points, partial_credit -- see
+    scoring.py for exactly how they affect the grade). Corrigés can be
+    saved/loaded/renamed/deleted by name (answer_key_store.py) so the
+    SAME corrigé can be reused across several classes/batches of copies
+    of the same test, rather than re-entered by hand each time."""
+
+    def __init__(self, master, n_questions, n_choices, existing_key=None, existing_name=None):
         super().__init__(master)
         self.title(tr("ak_title"))
-        self.geometry("560x600")
+        self.geometry("640x720")
         self.result = None
-        self._initial_key = existing_key or {}
+        self.validated = False
+        self.result_name = None
+        self._initial_key = (existing_key or {}).get("questions", {})
         self.letters = []
         self.vars = {}
+        self.points_vars = {}
 
         ttk.Label(self, text=tr("ak_hint"),
-                  justify="left", wraplength=520).pack(fill="x", padx=10, pady=8)
+                  justify="left", wraplength=600).pack(fill="x", padx=10, pady=8)
+
+        store_frame = ttk.LabelFrame(self, text=tr("ak_store_group"), padding=10)
+        store_frame.pack(fill="x", padx=10, pady=(0, 8))
+        row1 = ttk.Frame(store_frame)
+        row1.pack(fill="x")
+        ttk.Label(row1, text=tr("ak_store_label")).pack(side="left")
+        self.store_combo = ttk.Combobox(row1, state="readonly", width=22)
+        self.store_combo.pack(side="left", padx=5)
+        ttk.Button(row1, text=tr("btn_load"), command=self._on_load_from_store).pack(side="left", padx=2)
+        ttk.Button(row1, text=tr("btn_rename"), command=self._on_rename_in_store).pack(side="left", padx=2)
+        ttk.Button(row1, text=tr("btn_delete"), command=self._on_delete_from_store).pack(side="left", padx=2)
+        self._refresh_store_combo(select=existing_name)
+        save_row = ttk.Frame(store_frame)
+        save_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(save_row, text=tr("ak_save_as_label")).pack(side="left")
+        self.save_name_var = tk.StringVar(value=existing_name or "")
+        ttk.Entry(save_row, textvariable=self.save_name_var, width=22).pack(side="left", padx=5)
+        ttk.Button(save_row, text=tr("rmd_save_to_memory"), command=self._on_save_to_store).pack(
+            side="left", padx=3)
 
         top_row = ttk.Frame(self)
         top_row.pack(fill="x", padx=10)
@@ -936,7 +974,16 @@ class AnswerKeyDialog(tk.Toplevel):
         ttk.Spinbox(top_row, from_=3, to=6, textvariable=self.n_choices_var, width=6,
                     command=self._rebuild_grid).pack(side="left", padx=5)
 
-        self.scroll = ScrollableFrame(self, height=420)
+        options_row = ttk.Frame(self)
+        options_row.pack(fill="x", padx=10, pady=(8, 0))
+        self.negative_var = tk.BooleanVar(value=(existing_key or {}).get("negative_points", False))
+        ttk.Checkbutton(options_row, text=tr("ak_negative_points"), variable=self.negative_var).pack(
+            anchor="w")
+        self.partial_var = tk.BooleanVar(value=(existing_key or {}).get("partial_credit", False))
+        ttk.Checkbutton(options_row, text=tr("ak_partial_credit"), variable=self.partial_var).pack(
+            anchor="w")
+
+        self.scroll = ScrollableFrame(self, height=340)
         self.scroll.pack(fill="both", expand=True, padx=10, pady=8)
 
         self._rebuild_grid()
@@ -955,50 +1002,175 @@ class AnswerKeyDialog(tk.Toplevel):
             v.set(False)
 
     def _current_key(self):
+        """Current grid content as {q: {"correct": [...], "points":
+        "text typed"}} -- used only to preserve entries across a
+        _rebuild_grid (n_questions/n_choices change), so points stay as
+        raw text here (not yet validated as a number)."""
         key = {}
-        for (q, letter), v in self.vars.items():
-            if v.get():
-                key.setdefault(q, []).append(letter)
+        for q in sorted({q for (q, _letter) in self.vars.keys()}):
+            letters = [letter for letter in self.letters if self.vars[(q, letter)].get()]
+            points_text = self.points_vars[q].get() if q in self.points_vars else "1"
+            key[q] = {"correct": letters, "points": points_text}
         return key
 
     def _rebuild_grid(self):
-        # Preserves already-checked boxes when the number of questions or
-        # choices changes (otherwise changing one clears the other).
-        prev_key = self._current_key() if self.vars else self._initial_key
+        # Preserves already-checked boxes/points when the number of
+        # questions or choices changes (otherwise changing one clears
+        # the other).
+        prev_key = self._current_key() if self.vars else {
+            q: {"correct": info.get("correct", []), "points": _fmt_points(info.get("points", 1.0))}
+            for q, info in self._initial_key.items()
+        }
         for child in self.scroll.inner.winfo_children():
             child.destroy()
         self.vars = {}
+        self.points_vars = {}
         n_q = int(self.n_q_var.get())
         n_c = int(self.n_choices_var.get())
         self.letters = ["A", "B", "C", "D", "E", "F"][:n_c]
         header = ttk.Frame(self.scroll.inner)
         header.pack(fill="x")
         ttk.Label(header, text=tr("ak_question_col"), width=10).pack(side="left")
+        ttk.Label(header, text=tr("ak_points_col"), width=7).pack(side="left")
         for letter in self.letters:
             grid_header_cell(header, letter)
         for q in range(1, n_q + 1):
+            prev = prev_key.get(q, {})
             row = ttk.Frame(self.scroll.inner)
             row.pack(fill="x")
             ttk.Label(row, text=f"Q{q}", width=10).pack(side="left")
+            points_var = tk.StringVar(value=prev.get("points", "1"))
+            self.points_vars[q] = points_var
+            ttk.Entry(row, textvariable=points_var, width=6).pack(side="left", padx=(2, 8))
             for letter in self.letters:
-                v = tk.BooleanVar(value=letter in prev_key.get(q, []))
+                v = tk.BooleanVar(value=letter in prev.get("correct", []))
                 self.vars[(q, letter)] = v
                 grid_check_cell(row, v)
 
     def _on_validate(self):
-        key = {}
         n_q = int(self.n_q_var.get())
+        questions = {}
+        errors = []
         for q in range(1, n_q + 1):
             letters = [letter for letter in self.letters if self.vars[(q, letter)].get()]
-            if letters:
-                key[q] = letters
-        if not key:
+            if not letters:
+                continue
+            points_text = self.points_vars[q].get().strip().replace(",", ".")
+            try:
+                points = float(points_text) if points_text else 1.0
+            except ValueError:
+                points = None
+            if points is None or points <= 0:
+                errors.append(tr("ak_invalid_points_for", q=q))
+                continue
+            questions[q] = {"correct": letters, "points": points}
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        if not questions:
             if not messagebox.askyesno(APP_TITLE, tr("ak_no_key_confirm")):
                 return
-            self.result = {}
+            self.result = None
         else:
-            self.result = key
+            self.result = {"questions": questions, "negative_points": self.negative_var.get(),
+                            "partial_credit": self.partial_var.get()}
+        self.result_name = self.save_name_var.get().strip() or None
+        self.validated = True
         self.destroy()
+
+    # -- Corrigés saved to memory -------------------------------------
+    def _refresh_store_combo(self, select=None):
+        names = answer_key_store.list_keys()
+        self.store_combo.configure(values=names)
+        if select and select in names:
+            self.store_combo.set(select)
+
+    def _apply_loaded_key(self, key):
+        self._initial_key = key.get("questions", {})
+        self.n_q_var.set(max(self._initial_key.keys(), default=int(self.n_q_var.get())))
+        max_choice_count = max((len(info.get("correct", [])) for info in self._initial_key.values()),
+                                default=int(self.n_choices_var.get()))
+        # n_choices isn't derivable from the key alone (a question can
+        # have fewer correct letters than there are choices on the
+        # sheet) -- only bump it up if a saved question needs more
+        # choices than currently set, never shrink it.
+        self.n_choices_var.set(max(int(self.n_choices_var.get()), min(max_choice_count, 6)))
+        self.negative_var.set(key.get("negative_points", False))
+        self.partial_var.set(key.get("partial_credit", False))
+        self.vars = {}
+        self._rebuild_grid()
+
+    def _on_load_from_store(self):
+        name = self.store_combo.get()
+        if not name:
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
+            return
+        key = answer_key_store.load_key(name)
+        if key is None:
+            return
+        self._apply_loaded_key(key)
+        self.save_name_var.set(name)
+
+    def _on_rename_in_store(self):
+        name = self.store_combo.get()
+        if not name:
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
+            return
+        new_name = simpledialog.askstring(APP_TITLE, tr("ak_new_name_for", name=name), initialvalue=name,
+                                           parent=self)
+        if not new_name or new_name.strip() == name:
+            return
+        new_name = new_name.strip()
+        if not answer_key_store.rename_key(name, new_name):
+            messagebox.showerror(APP_TITLE, tr("ak_rename_target_exists", name=new_name))
+            return
+        self._refresh_store_combo(select=new_name)
+        if self.save_name_var.get() == name:
+            self.save_name_var.set(new_name)
+
+    def _on_delete_from_store(self):
+        name = self.store_combo.get()
+        if not name:
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
+            return
+        if messagebox.askyesno(APP_TITLE, tr("ak_confirm_delete", name=name)):
+            answer_key_store.delete_key(name)
+            self._refresh_store_combo()
+
+    def _on_save_to_store(self):
+        n_q = int(self.n_q_var.get())
+        questions = {}
+        errors = []
+        for q in range(1, n_q + 1):
+            letters = [letter for letter in self.letters if self.vars[(q, letter)].get()]
+            if not letters:
+                continue
+            points_text = self.points_vars[q].get().strip().replace(",", ".")
+            try:
+                points = float(points_text) if points_text else 1.0
+            except ValueError:
+                points = None
+            if points is None or points <= 0:
+                errors.append(tr("ak_invalid_points_for", q=q))
+                continue
+            questions[q] = {"correct": letters, "points": points}
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        if not questions:
+            messagebox.showwarning(APP_TITLE, tr("ak_no_key_to_save"))
+            return
+        name = self.save_name_var.get().strip()
+        if not name:
+            messagebox.showwarning(APP_TITLE, tr("ak_name_required"))
+            return
+        if name in answer_key_store.list_keys():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
+                return
+        answer_key_store.save_key(name, {"questions": questions, "negative_points": self.negative_var.get(),
+                                          "partial_credit": self.partial_var.get()})
+        self._refresh_store_combo(select=name)
+        messagebox.showinfo(APP_TITLE, tr("ak_key_saved", name=name, n=len(questions)))
 
 
 # ---------------------------------------------------------------------
@@ -1296,10 +1468,83 @@ class ManualEntryDialog(tk.Toplevel):
         self.destroy()
 
 
+class RosterTableEditor(ttk.Frame):
+    """Reusable editable numero/nom/classe grid: add/remove rows, load a
+    roster dict into it, extract it back out with validation. Mirrors
+    RosterManagerDialog's table (kept separate rather than shared, so
+    editing this one can't regress that already-working dialog); used by
+    DataTab to let the teacher retouch/complete a class's saved roster."""
+
+    def __init__(self, master, height=260):
+        super().__init__(master)
+        self.rows = []
+        header = ttk.Frame(self)
+        header.pack(fill="x")
+        ttk.Label(header, text=tr("col_number"), width=8).pack(side="left", padx=2)
+        ttk.Label(header, text=tr("col_name"), width=28).pack(side="left", padx=2)
+        ttk.Label(header, text=tr("col_class"), width=12).pack(side="left", padx=2)
+        self.scroll = ScrollableFrame(self, height=height)
+        self.scroll.pack(fill="both", expand=True, pady=(4, 0))
+        ttk.Button(self, text=tr("btn_add_row"), command=lambda: self.add_row()).pack(anchor="w", pady=6)
+
+    def add_row(self, numero="", nom="", classe=""):
+        row_frame = ttk.Frame(self.scroll.inner)
+        row_frame.pack(fill="x", pady=1)
+        row_data = {"frame": row_frame}
+        row_data["numero"] = tk.StringVar(value=str(numero) if numero != "" else "")
+        row_data["nom"] = tk.StringVar(value=nom)
+        row_data["classe"] = tk.StringVar(value=classe)
+        ttk.Entry(row_frame, textvariable=row_data["numero"], width=8).pack(side="left", padx=2)
+        ttk.Entry(row_frame, textvariable=row_data["nom"], width=28).pack(side="left", padx=2)
+        ttk.Entry(row_frame, textvariable=row_data["classe"], width=12).pack(side="left", padx=2)
+        ttk.Button(row_frame, text="✕", width=3, command=lambda: self.delete_row(row_data)).pack(
+            side="left", padx=2)
+        self.rows.append(row_data)
+        return row_data
+
+    def delete_row(self, row_data):
+        row_data["frame"].destroy()
+        self.rows.remove(row_data)
+
+    def clear_rows(self):
+        for row in list(self.rows):
+            self.delete_row(row)
+
+    def load_roster(self, roster):
+        self.clear_rows()
+        for num in sorted(roster.keys()):
+            info = roster[num]
+            self.add_row(num, info.get("nom", ""), info.get("classe", ""))
+
+    def extract_roster(self):
+        roster, errors, seen = {}, [], set()
+        for row in self.rows:
+            nom = row["nom"].get().strip()
+            numero_str = row["numero"].get().strip()
+            classe = row["classe"].get().strip()
+            if not nom and not numero_str:
+                continue
+            if not numero_str.isdigit():
+                errors.append(tr("rmd_invalid_number_for", name=nom or tr("rmd_no_name")))
+                continue
+            num = int(numero_str)
+            if num in seen:
+                errors.append(tr("rmd_number_used_twice", num=num))
+                continue
+            if not nom:
+                errors.append(tr("rmd_name_missing_for", num=num))
+                continue
+            seen.add(num)
+            roster[num] = {"nom": nom, "classe": classe}
+        return roster, errors
+
+
 # ---------------------------------------------------------------------
 # Single window to view/edit a numero/nom/classe table, and manage the
-# classes saved to memory (class_store.py): load, save, rename, delete.
-# Used from both tabs.
+# classes saved to memory -- backed by class_archive.py, the same
+# per-class archive used by DataTab, so a roster saved here is the same
+# one shown/editable there: load, save, rename, delete. Used from both
+# tabs.
 # ---------------------------------------------------------------------
 class RosterManagerDialog(tk.Toplevel):
     def __init__(self, master, initial_roster=None, initial_name=None, on_apply=None):
@@ -1409,7 +1654,7 @@ class RosterManagerDialog(tk.Toplevel):
 
     # -- Classes saved to memory -----------------------------------------------
     def _refresh_store_combo(self, select=None):
-        names = class_store.list_classes()
+        names = class_archive.list_classes()
         self.store_combo.configure(values=names)
         if select and select in names:
             self.store_combo.set(select)
@@ -1423,7 +1668,7 @@ class RosterManagerDialog(tk.Toplevel):
             return
         if self.rows and not messagebox.askyesno(APP_TITLE, tr("rmd_confirm_replace_table")):
             return
-        roster = class_store.load_class(name)
+        roster = class_archive.load_roster(name)
         self._load_roster_into_table(roster)
         self.save_name_var.set(name)
 
@@ -1436,10 +1681,13 @@ class RosterManagerDialog(tk.Toplevel):
                                            parent=self)
         if not new_name or new_name.strip() == name:
             return
-        class_store.rename_class(name, new_name.strip())
-        self._refresh_store_combo(select=new_name.strip())
+        new_name = new_name.strip()
+        if not class_archive.rename_class(name, new_name):
+            messagebox.showerror(APP_TITLE, tr("rmd_rename_target_exists", name=new_name))
+            return
+        self._refresh_store_combo(select=new_name)
         if self.save_name_var.get() == name:
-            self.save_name_var.set(new_name.strip())
+            self.save_name_var.set(new_name)
 
     def _on_delete_from_store(self):
         name = self.store_combo.get()
@@ -1447,7 +1695,7 @@ class RosterManagerDialog(tk.Toplevel):
             messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
             return
         if messagebox.askyesno(APP_TITLE, tr("rmd_confirm_delete_class", name=name)):
-            class_store.delete_class(name)
+            class_archive.delete_class(name)
             self._refresh_store_combo()
 
     def _on_save_to_store(self):
@@ -1462,10 +1710,10 @@ class RosterManagerDialog(tk.Toplevel):
         if not name:
             messagebox.showwarning(APP_TITLE, tr("rmd_name_required"))
             return
-        if name in class_store.list_classes():
+        if name in class_archive.list_classes():
             if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
-        class_store.save_class(name, roster)
+        class_archive.save_roster(name, roster)
         self._refresh_store_combo(select=name)
         messagebox.showinfo(APP_TITLE, tr("rmd_class_saved", name=name, n=len(roster)))
 
@@ -1559,7 +1807,9 @@ class ScanTab(ttk.Frame):
         self.roster = {}
         self.report = []
         self.answer_key = None
+        self.answer_key_name = None
         self.results_win = None
+        self.last_run_dir = None
         self.last_run_name = None
         self.last_archive_classe = None
         self.note_out_of_20_var = tk.BooleanVar(value=self.settings.get("note_out_of_20", False))
@@ -1612,16 +1862,6 @@ class ScanTab(ttk.Frame):
         self.answer_key_label = ttk.Label(key_row, text=tr("scan_key_undefined"),
                                            foreground="#555555")
         self.answer_key_label.pack(side="left", padx=10)
-
-        out_frame = ttk.LabelFrame(top, text=tr("scan_output_group"), padding=10)
-        out_frame.pack(fill="x", pady=(0, 8))
-        self.output_dir_var = tk.StringVar(
-            value=s.get("scan_output_dir",
-                         os.path.join(app_config.default_documents_dir(), tr("scan_output_dir_default"))))
-        row3 = ttk.Frame(out_frame)
-        row3.pack(fill="x")
-        ttk.Entry(row3, textvariable=self.output_dir_var, width=50).pack(side="left", fill="x", expand=True)
-        ttk.Button(row3, text=tr("btn_browse"), command=self._browse_output_dir).pack(side="left", padx=5)
 
         archive_frame = ttk.LabelFrame(top, text=tr("scan_archive_group"), padding=10)
         archive_frame.pack(fill="x", pady=(0, 8))
@@ -1742,10 +1982,10 @@ class ScanTab(ttk.Frame):
         if not name or not name.strip():
             return
         name = name.strip()
-        if name in class_store.list_classes():
+        if name in class_archive.list_classes():
             if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
-        class_store.save_class(name, roster)
+        class_archive.save_roster(name, roster)
         messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
 
     # -- Photos -------------------------------------------------------
@@ -1828,23 +2068,28 @@ class ScanTab(ttk.Frame):
         s = self.settings
         n_q = s.get("n_questions", 12)
         n_c = s.get("n_choices", 5)
-        dialog = AnswerKeyDialog(self, n_q, n_c, existing_key=self.answer_key)
+        dialog = AnswerKeyDialog(self, n_q, n_c, existing_key=self.answer_key,
+                                  existing_name=self.answer_key_name)
         self.wait_window(dialog)
-        if dialog.result is not None:
-            self.answer_key = dialog.result or None
+        if dialog.validated:
+            self.answer_key = dialog.result
+            self.answer_key_name = dialog.result_name if self.answer_key else None
             s["n_questions"] = int(dialog.n_q_var.get())
             s["n_choices"] = int(dialog.n_choices_var.get())
             app_config.save_settings(s)
-            if self.answer_key:
-                self.answer_key_label.config(text=tr("scan_key_defined", n=len(self.answer_key)))
-            else:
-                self.answer_key_label.config(text=tr("scan_key_undefined"))
+            self._update_answer_key_label()
 
-    # -- Output folder ---------------------------------------------
-    def _browse_output_dir(self):
-        d = filedialog.askdirectory(title=tr("scan_choose_results_dir"))
-        if d:
-            self.output_dir_var.set(d)
+    def _update_answer_key_label(self):
+        if self.answer_key and self.answer_key.get("questions"):
+            n = len(self.answer_key["questions"])
+            total = sum(q.get("points", 1.0) for q in self.answer_key["questions"].values())
+            if self.answer_key_name:
+                self.answer_key_label.config(
+                    text=tr("scan_key_defined_named", name=self.answer_key_name, n=n, total=_fmt_points(total)))
+            else:
+                self.answer_key_label.config(text=tr("scan_key_defined", n=n, total=_fmt_points(total)))
+        else:
+            self.answer_key_label.config(text=tr("scan_key_undefined"))
 
     def _on_toggle_save_copies(self):
         s = self.settings
@@ -1879,12 +2124,6 @@ class ScanTab(ttk.Frame):
         if not self.roster:
             if not messagebox.askyesno(APP_TITLE, tr("scan_no_csv_confirm")):
                 return
-        output_dir = self.output_dir_var.get().strip()
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-        except OSError as exc:
-            messagebox.showerror(APP_TITLE, tr("scan_output_dir_error", detail=exc))
-            return
 
         # Captured now (main thread) rather than read from work() later:
         # tkinter Variables aren't safe to query from a background thread.
@@ -1896,9 +2135,10 @@ class ScanTab(ttk.Frame):
         # class+date suggestion, editable, so the teacher can label it
         # something meaningful (e.g. "Controle_chapitre_3") to find again
         # later via "Charger une correction archivée…". This also
-        # determines the archive folder name and the working output
-        # folder name, so it's decided up front rather than after the
-        # fact.
+        # determines the archive folder name (see class_archive.py):
+        # there's no separate "working" output folder any more -- the
+        # per-class archive IS where a correction's files live, no
+        # redundant copy elsewhere.
         classe_name = suggest_run_classe(roster_snapshot)
         suggested_name = build_run_name(roster_snapshot, photo_paths)
         typed_name = simpledialog.askstring(APP_TITLE, tr("scan_ask_run_name"),
@@ -1906,11 +2146,7 @@ class ScanTab(ttk.Frame):
         if typed_name is None:
             return
         base_name = _sanitize_filename_part(typed_name.strip()) if typed_name.strip() else suggested_name
-        existing_names = set()
-        if os.path.isdir(output_dir):
-            existing_names |= set(os.listdir(output_dir))
-        existing_names |= set(class_archive.list_corrections(classe_name))
-        run_name = dedupe_name(base_name, existing_names)
+        run_name = dedupe_name(base_name, set(class_archive.list_corrections(classe_name)))
 
         self.run_btn.config(state="disabled")
         self.progress.start(12)
@@ -1918,16 +2154,15 @@ class ScanTab(ttk.Frame):
         self.summary_label.config(text=tr("scan_reading_photos", n=len(photo_paths)))
 
         def work():
-            run_dir = os.path.join(output_dir, run_name)
+            run_dir = class_archive.run_dir(classe_name, run_name)
             report = process_batch(photo_paths, roster_snapshot, run_dir)
             if self.answer_key:
                 scoring.compute_scores(report, self.answer_key)
 
             # Always archive the roster + this run's results under the
-            # app's own portable "Données" folder, independent of
-            # wherever `output_dir` above points -- see class_archive.py.
-            # The scanned copies themselves are only archived (compressed)
-            # if the teacher opted in, since that's the heavy part.
+            # app's own portable "Données" folder. The scanned copies
+            # themselves are only archived (compressed) if the teacher
+            # opted in, since that's the heavy part.
             if roster_snapshot:
                 class_archive.save_roster(classe_name, roster_snapshot)
             headers, rows = build_results_csv_rows(report, out_of_20)
@@ -1957,7 +2192,6 @@ class ScanTab(ttk.Frame):
             self.open_class_archive_btn.config(state="normal")
             s = self.settings
             s["scan_csv_path"] = self.csv_path_var.get()
-            s["scan_output_dir"] = self.output_dir_var.get()
             app_config.save_settings(s)
             self.summary_label.config(text=format_batch_report(report))
 
@@ -2015,7 +2249,7 @@ class ScanTab(ttk.Frame):
     def _on_export(self):
         if not self.report:
             return
-        default_dir = getattr(self, "last_run_dir", self.output_dir_var.get())
+        default_dir = self.last_run_dir or app_config.get_config_dir()
         default_name = self.last_run_name or ("resultats_" + time.strftime("%Y%m%d_%H%M%S"))
         path = filedialog.asksaveasfilename(
             title=tr("res_export_title"), initialdir=default_dir,
@@ -2059,7 +2293,132 @@ class ScanTab(ttk.Frame):
 
 
 # ---------------------------------------------------------------------
-# Tab 3: preferences (language)
+# Tab 3: reviewing/editing/analyzing the saved per-class archive
+# (class_archive.py) -- roster, and the history of past corrections.
+# ---------------------------------------------------------------------
+class DataTab(ttk.Frame):
+    def __init__(self, master, on_load_correction):
+        super().__init__(master, padding=12)
+        self.on_load_correction = on_load_correction
+        self.current_classe = None
+        self._build_ui()
+        self._refresh_classes()
+
+    def _build_ui(self):
+        top = ttk.Frame(self)
+        top.pack(fill="x")
+        ttk.Label(top, text=tr("data_class_label")).pack(side="left")
+        self.classe_var = tk.StringVar()
+        self.classe_combo = ttk.Combobox(top, textvariable=self.classe_var, state="readonly", width=25)
+        self.classe_combo.pack(side="left", padx=5)
+        self.classe_combo.bind("<<ComboboxSelected>>", lambda e: self._load_classe())
+        ttk.Button(top, text=tr("btn_refresh"), command=self._refresh_classes).pack(side="left", padx=5)
+        self.open_folder_btn = ttk.Button(top, text=tr("scan_open_class_folder"),
+                                           command=self._open_folder, state="disabled")
+        self.open_folder_btn.pack(side="left", padx=5)
+
+        self.summary_label = ttk.Label(self, text="", foreground="#333333", wraplength=760, justify="left")
+        self.summary_label.pack(fill="x", pady=(8, 8))
+
+        roster_frame = ttk.LabelFrame(self, text=tr("data_roster_group"), padding=10)
+        roster_frame.pack(fill="both", expand=False, pady=(0, 8))
+        self.roster_editor = RosterTableEditor(roster_frame, height=180)
+        self.roster_editor.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_roster).pack(
+            anchor="w", pady=(6, 0))
+
+        corr_frame = ttk.LabelFrame(self, text=tr("data_corrections_group"), padding=10)
+        corr_frame.pack(fill="both", expand=True)
+        columns = ("nom", "date", "eleves", "moyenne")
+        self.corr_tree = ttk.Treeview(corr_frame, columns=columns, show="headings", height=8)
+        for col, label, width in [("nom", tr("data_col_correction"), 220), ("date", tr("data_col_date"), 130),
+                                   ("eleves", tr("data_col_copies"), 80), ("moyenne", tr("data_col_average"), 100)]:
+            self.corr_tree.heading(col, text=label)
+            self.corr_tree.column(col, width=width, anchor="w")
+        self.corr_tree.pack(fill="both", expand=True)
+        self.corr_tree.bind("<Double-1>", lambda e: self._load_selected_correction())
+        ttk.Button(corr_frame, text=tr("data_load_correction_btn"), command=self._load_selected_correction).pack(
+            anchor="w", pady=(6, 0))
+
+    # -- Classes -----------------------------------------------------
+    def _refresh_classes(self):
+        classes = class_archive.list_classes()
+        selected = self.classe_var.get()
+        self.classe_combo["values"] = classes
+        if not classes:
+            self.classe_var.set("")
+            self.current_classe = None
+            self.roster_editor.clear_rows()
+            self.corr_tree.delete(*self.corr_tree.get_children())
+            self.open_folder_btn.config(state="disabled")
+            self.summary_label.config(text=tr("data_no_class"))
+            return
+        if selected not in classes:
+            self.classe_combo.current(0)
+        self._load_classe()
+
+    def _load_classe(self):
+        classe = self.classe_var.get()
+        self.current_classe = classe
+        self.open_folder_btn.config(state="normal")
+        self.roster_editor.load_roster(class_archive.load_roster(classe))
+        self._refresh_corrections()
+
+    def _open_folder(self):
+        if self.current_classe:
+            os.startfile(class_archive.class_dir(self.current_classe))
+
+    # -- Roster (retoucher / compléter) -------------------------------
+    def _save_roster(self):
+        if not self.current_classe:
+            return
+        roster, errors = self.roster_editor.extract_roster()
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        class_archive.save_roster(self.current_classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        self._refresh_corrections()
+
+    # -- Corrections (vérifier / analyser) ----------------------------
+    def _refresh_corrections(self):
+        self.corr_tree.delete(*self.corr_tree.get_children())
+        classe = self.current_classe
+        if not classe:
+            return
+        names = class_archive.list_corrections(classe)
+        averages = []
+        for name in names:
+            stats = class_archive.correction_stats(classe, name) or {}
+            n_entries = stats.get("n_entries")
+            avg = stats.get("avg_note_20")
+            if avg is not None:
+                averages.append(avg)
+            self.corr_tree.insert(
+                "", "end", iid=name,
+                values=(name, stats.get("date", ""), n_entries if n_entries is not None else "-",
+                        f"{avg:.1f}/20" if avg is not None else "-"))
+        n_students = len(class_archive.load_roster(classe))
+        overall = f"{sum(averages) / len(averages):.1f}/20" if averages else "-"
+        self.summary_label.config(text=tr("data_class_summary", n_students=n_students,
+                                           n_corrections=len(names), overall=overall))
+
+    def _load_selected_correction(self):
+        classe = self.current_classe
+        sel = self.corr_tree.selection()
+        if not classe or not sel:
+            messagebox.showwarning(APP_TITLE, tr("data_choose_correction_first"))
+            return
+        run_name = sel[0]
+        report = class_archive.load_report_json(classe, run_name)
+        if report is None:
+            messagebox.showerror(APP_TITLE, tr("arch_report_missing"))
+            return
+        self.on_load_correction(report, classe, run_name)
+
+
+# ---------------------------------------------------------------------
+# Tab 4: preferences (language)
 # ---------------------------------------------------------------------
 class PreferencesTab(ttk.Frame):
     def __init__(self, master, on_language_change):
@@ -2099,6 +2458,8 @@ class PreferencesTab(ttk.Frame):
 
 def main():
     translations.load_language_from_settings()
+    class_archive.migrate_legacy_class_store()
+    answer_key_store.migrate_legacy_store()
     root = tk.Tk()
     root.geometry("880x820")
 
@@ -2125,8 +2486,15 @@ def main():
         subtitle_label.config(text=tr("app_subtitle"))
         for child in notebook.winfo_children():
             child.destroy()
+        scan_tab = ScanTab(notebook)
+
+        def on_load_correction(report, classe, run_name):
+            scan_tab._on_archive_loaded(report, classe, run_name)
+            notebook.select(scan_tab)
+
         notebook.add(GenerateTab(notebook), text=tr("tab_generate"))
-        notebook.add(ScanTab(notebook), text=tr("tab_scan"))
+        notebook.add(scan_tab, text=tr("tab_scan"))
+        notebook.add(DataTab(notebook, on_load_correction=on_load_correction), text=tr("tab_data"))
         notebook.add(PreferencesTab(notebook, on_language_change=rebuild_ui), text=tr("tab_preferences"))
 
     rebuild_ui()

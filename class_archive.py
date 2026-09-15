@@ -7,6 +7,13 @@ point anywhere, e.g. a shared drive): this archive always lives inside
 the app's own portable data folder, so it travels with the USB drive no
 matter where the teacher sends the working output.
 
+This is also the SOLE storage for "classes saved to memory" (roster
+save/load/rename/delete, from GenerateTab, ScanTab and
+RosterManagerDialog) -- a class saved there is the exact same class
+shown/editable in DataTab, not a separate copy. It replaces the older
+class_store.py (a single flat classes.json); see
+migrate_legacy_class_store() below for the one-time upgrade path.
+
 Layout, for a class named "6A":
     Données/
       Classes/
@@ -29,6 +36,8 @@ ArchiveBrowserDialog)."""
 import csv
 import json
 import os
+import shutil
+import time
 
 import cv2
 
@@ -86,6 +95,62 @@ def list_classes():
     return sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))
 
 
+def rename_class(old_name, new_name):
+    """Renames a class's whole archive folder (roster AND its
+    corrections history move together). Returns True on success, False
+    if there's nothing to rename or a class with `new_name` already
+    exists (folders aren't merged automatically)."""
+    old_path = _class_dir_path(old_name)
+    new_path = _class_dir_path(new_name)
+    if old_name == new_name or not os.path.isdir(old_path) or os.path.exists(new_path):
+        return False
+    os.rename(old_path, new_path)
+    return True
+
+
+def delete_class(name):
+    """Permanently deletes a class's whole archive folder (roster AND
+    every correction/copy archived for it)."""
+    path = _class_dir_path(name)
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+
+
+_LEGACY_STORE_FILENAME = "classes.json"
+
+
+def migrate_legacy_class_store():
+    """One-time migration from the old class_store.py storage (a single
+    Données/classes.json file with every roster, superseded by this
+    per-class-folder archive so "classes saved to memory" and "saved
+    data" are the same thing everywhere in the app) into this module's
+    per-class eleves.csv. Renames the legacy file afterwards so this only
+    ever does real work once. Safe to call on every startup -- a no-op
+    once migrated (or if there was nothing to migrate)."""
+    legacy_path = os.path.join(app_config.get_config_dir(), _LEGACY_STORE_FILENAME)
+    if not os.path.isfile(legacy_path):
+        return
+    try:
+        with open(legacy_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return
+    existing = set(list_classes())
+    for name, roster_raw in raw.items():
+        if name in existing:
+            continue  # a class_archive folder already exists for this name -- don't overwrite it
+        try:
+            roster = {int(num): {"nom": info.get("nom", ""), "classe": info.get("classe", "")}
+                      for num, info in roster_raw.items()}
+        except (TypeError, ValueError, AttributeError):
+            continue
+        save_roster(name, roster)
+    try:
+        os.replace(legacy_path, legacy_path + ".migrated")
+    except OSError:
+        pass
+
+
 def list_corrections(classe_name):
     """Names of every archived correction for this class, most recently
     saved first."""
@@ -109,6 +174,47 @@ def save_roster(classe_name, roster):
             info = roster[num]
             w.writerow([num, info.get("nom", ""), info.get("classe", classe_name)])
     return path
+
+
+def load_roster(classe_name):
+    """Reads this class's eleves.csv back into a roster dict {numero
+    (int): {"nom":..., "classe":...}}, for the "review/complete this
+    class's data" tab (see qcm_app.DataTab). Returns {} if this class
+    hasn't been archived yet."""
+    path = os.path.join(_class_dir_path(classe_name), ROSTER_FILENAME)
+    if not os.path.isfile(path):
+        return {}
+    roster = {}
+    with open(path, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            try:
+                num = int(row["numero"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            roster[num] = {"nom": row.get("nom", "").strip(), "classe": row.get("classe", "").strip()}
+    return roster
+
+
+def correction_stats(classe_name, run_name):
+    """Quick stats for one archived correction -- number of copies
+    processed, average grade out of 20 (only counting entries that were
+    actually graded, i.e. an answer key was in use for that run), and
+    when it was saved. Used for the class-by-class analysis view (see
+    qcm_app.DataTab). Returns None if that correction doesn't exist."""
+    path = os.path.join(_class_dir_path(classe_name), CORRECTIONS_DIRNAME, _sanitize(run_name))
+    if not os.path.isdir(path):
+        return None
+    date_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(path)))
+    report = load_report_json(classe_name, run_name)
+    if report is None:
+        return {"n_entries": None, "avg_note_20": None, "date": date_str}
+    notes = [e["note"] for e in report if e.get("note") is not None]
+    return {
+        "n_entries": len(report),
+        "avg_note_20": (sum(notes) / len(notes)) if notes else None,
+        "date": date_str,
+    }
 
 
 def save_results(classe_name, run_name, headers, rows):
