@@ -1,31 +1,32 @@
 """
-Notation : comparaison des réponses détectées (produites par
-roster_match.process_batch / detect_modular.analyse) à un corrigé saisi
-par l'enseignant dans l'interface.
+Grading: compares the detected answers (produced by
+roster_match.process_batch / detect_modular.analyse) to an answer key
+entered by the teacher in the interface.
 
-Ce module est un ajout (pas un des 4 modules déjà testés) : il ne touche
-pas à la détection, seulement à la comparaison + calcul de note.
+This module is an addition (not one of the 4 already-tested modules): it
+doesn't touch detection, only comparison + grade computation.
 """
 
 
 def compute_scores(report, answer_key):
-    """Ajoute 'points', 'max_points', 'note' (/20) et 'incertaines' à
-    chaque entrée du rapport qui possède un champ 'questions' (donc pas
-    aux entrées 'erreur_lecture' ni 'face_manquante', qui n'ont pas de
-    réponses exploitables).
+    """Adds 'points', 'max_points', 'note' (French for "grade", out of
+    20) and 'incertaines' (French for "uncertain [ones]") to every
+    report entry that has a 'questions' field (so not to 'erreur_lecture'
+    nor 'face_manquante' entries, which have no usable answers). These
+    field names are kept as-is to match the data model used throughout
+    roster_match.py and qcm_app.py.
 
-    answer_key : {numero_question (int): liste/ensemble de lettres
-    correctes, ex. {1: ["B"], 2: ["A", "C"]}}. Une question est comptée
-    bonne seulement si l'ensemble des réponses détectées correspond
-    EXACTEMENT à l'ensemble attendu (pas de crédit partiel).
+    answer_key: {question_number (int): list/set of correct letters,
+    e.g. {1: ["B"], 2: ["A", "C"]}}. A question is counted correct only
+    if the set of detected answers matches the expected set EXACTLY (no
+    partial credit).
 
-    Une question dont au moins une bulle est "à vérifier" (flagged) est
-    comptée comme incertaine plutôt que bonne ou mauvaise : elle est
-    listée dans 'incertaines' et ne rapporte aucun point tant que
-    l'enseignant ne l'a pas tranchée manuellement (via la fenêtre de
-    détail dans l'application).
+    A question where at least one bubble is "to check" (flagged) is
+    counted as uncertain rather than correct or wrong: it's listed in
+    'incertaines' and earns no points until the teacher has resolved it
+    manually (via the detail window in the application).
 
-    Modifie et retourne `report` (liste de dicts, cf. roster_match)."""
+    Modifies and returns `report` (list of dicts, see roster_match)."""
     max_points = len(answer_key)
     for entry in report:
         if "questions" not in entry:
@@ -51,8 +52,8 @@ def compute_scores(report, answer_key):
 
 
 def rescore_entry(entry, answer_key):
-    """Recalcule la note d'UNE seule entrée (après une correction
-    manuelle dans la fenêtre de détail). Suppose que 'flagged' a été vidé
-    pour les questions tranchées à la main (cf. DetailDialog)."""
+    """Recomputes the grade for ONE single entry (after a manual fix in
+    the detail window). Assumes 'flagged' was cleared for the questions
+    resolved by hand (see DetailDialog)."""
     compute_scores([entry], answer_key)
     return entry

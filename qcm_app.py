@@ -1,12 +1,12 @@
 """
-QCM Scanner — application locale (fenêtre) pour générer les feuilles-
-réponses et corriger les copies scannées.
+QCM Scanner -- local windowed application to generate answer sheets and
+grade scanned copies.
 
-Ce fichier est la seule pièce nouvelle qui construit une interface autour
-des 4 modules déjà écrits et testés (generate_sheet_modular, detect_modular,
-roster_match, sheet_layout_v2) : il ne réimplémente ni le dessin des
-feuilles ni la lecture optique, seulement le formulaire, la liste des
-résultats et la notation (scoring.py).
+This file is the only new piece that builds an interface around the 4
+already-written and tested modules (generate_sheet_modular, detect_modular,
+roster_match, sheet_layout_v2): it does not reimplement sheet drawing nor
+optical reading, only the form, the results list, grading (scoring.py)
+and the translated user interface (translations.py).
 """
 import csv
 import glob
@@ -30,34 +30,48 @@ from roster_match import load_roster, process_batch, format_batch_report
 import scoring
 import app_config
 import class_store
+import translations
+from translations import tr
 
 APP_TITLE = "QCM Scanner"
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
-SIZE_PRESETS = {
-    "Petite (format A6, 4 feuilles par page A4)": dict(scale=1.0, tiles_rows=2, tiles_cols=2),
-    "Moyenne (format A5, 2 feuilles par page A4)": dict(scale=2 ** 0.5, tiles_rows=1, tiles_cols=2),
-    "Grande (format A4, 1 feuille par page)": dict(scale=2.0, tiles_rows=1, tiles_cols=1),
+# Stable (language-independent) ids for the sheet-size presets. The
+# Combobox shows the translated label (tr(f"preset_{id}")); only the id
+# is ever persisted to settings, so switching language never breaks a
+# previously saved choice.
+SIZE_PRESET_IDS = ["small", "medium", "large"]
+SIZE_PRESET_PARAMS = {
+    "small": dict(scale=1.0, tiles_rows=2, tiles_cols=2),
+    "medium": dict(scale=2 ** 0.5, tiles_rows=1, tiles_cols=2),
+    "large": dict(scale=2.0, tiles_rows=1, tiles_cols=1),
 }
 
-STATUS_LABELS = {
-    "ok": "OK",
-    "feuille_douteuse": "À vérifier",
-    "numero_inconnu": "Numéro inconnu",
-    "face_manquante": "Face manquante",
-    "erreur_lecture": "Erreur de lecture",
+STATUS_KEY_MAP = {
+    "ok": "status_ok",
+    "feuille_douteuse": "status_douteuse",
+    "numero_inconnu": "status_inconnu",
+    "face_manquante": "status_manquante",
+    "erreur_lecture": "status_erreur",
 }
+
+
+def status_label(status):
+    return tr(STATUS_KEY_MAP.get(status, status))
+
 
 HEADER_TOKENS = {"numero", "numéro", "nom", "classe"}
 
 
 def _parse_tabular_rows(rows, col_index):
-    """Construit un roster {numero: {nom, classe}} à partir de lignes
-    déjà découpées en colonnes (une ligne = un élève). col_index indique
-    l'index de chaque colonne reconnue ('nom' obligatoire, 'numero' et
-    'classe' facultatifs). Les élèves sans numéro se voient attribuer le
-    plus petit numéro libre, par classe (dans l'ordre où les classes
-    apparaissent dans le fichier) puis par ordre alphabétique du nom."""
+    """Builds a roster {numero: {nom, classe}} from rows already split
+    into columns (one row = one student). col_index gives the index of
+    each recognized column ('nom' required, 'numero' and 'classe'
+    optional). Students without a number get the smallest free number,
+    grouped by class (in the order classes first appear in the file)
+    then alphabetically by name (nom/classe/numero are the field names
+    used everywhere in the data model -- French for "name"/"class"/
+    "number" -- kept as-is, see roster_match.py)."""
     entries = []
     for row in rows:
         def get(col):
@@ -96,12 +110,11 @@ def _parse_tabular_rows(rows, col_index):
 
 
 def _parse_wide_multi_classe(rows):
-    """Format 'large' : une ligne = une classe, première colonne = nom
-    de la classe, colonnes suivantes = noms des élèves de cette classe
-    (ex. classe1;Alice;Bob puis classe2;Chloé;David;Eve sur la ligne
-    suivante). Les numéros sont attribués séquentiellement, classe par
-    classe (dans l'ordre des lignes), par ordre alphabétique du nom à
-    l'intérieur de chaque classe."""
+    """'Wide' format: one row = one class, first column = class name,
+    following columns = names of the students in that class (e.g.
+    class1;Alice;Bob then class2;Chloe;David;Eve on the next row).
+    Numbers are assigned sequentially, class by class (in row order),
+    alphabetically by name within each class."""
     roster = {}
     next_num = 1
     for row in rows:
@@ -116,14 +129,14 @@ def _parse_wide_multi_classe(rows):
 
 
 def smart_load_roster(path):
-    """Charge un CSV élèves de façon tolérante. Essaie d'abord le format
-    standard numero;nom;classe (roster_match.load_roster, déjà testé) ;
-    si la colonne 'numero' est absente ou incomplète, détecte
-    automatiquement soit un format nom[;classe] (numéros attribués
-    automatiquement), soit le format 'large' une ligne par classe.
-    Retourne (roster, message_ou_None) — message n'est pas None si les
-    numéros ont été attribués automatiquement (l'appelant doit alors
-    proposer d'enregistrer un CSV au format standard)."""
+    """Loads a student CSV tolerantly. First tries the standard
+    numero;nom;classe format (roster_match.load_roster, already tested);
+    if the 'numero' column is missing or incomplete, automatically
+    detects either a nom[;classe] format (numbers assigned
+    automatically), or the 'wide' one-row-per-class format.
+    Returns (roster, message_or_None) -- message is not None if numbers
+    were assigned automatically (the caller should then offer to save a
+    standard-format CSV)."""
     try:
         roster = load_roster(path)
         if roster:
@@ -134,12 +147,12 @@ def smart_load_roster(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         rows = [row for row in csv.reader(f, delimiter=";") if any(c.strip() for c in row)]
     if not rows:
-        raise ValueError("Le fichier CSV est vide.")
+        raise ValueError(tr("csv_empty"))
 
     header = [c.strip().lower() for c in rows[0]]
     looks_like_header = len(header) <= 3 and any(tok in HEADER_TOKENS for tok in header)
 
-    auto_msg = "Numéros attribués automatiquement (par classe, puis par ordre alphabétique du nom)."
+    auto_msg = tr("csv_auto_numbered")
 
     if looks_like_header:
         col_index = {}
@@ -160,14 +173,10 @@ def smart_load_roster(path):
             roster = _parse_tabular_rows(rows, col_index)
         else:
             roster = _parse_wide_multi_classe(rows)
-            auto_msg = ("Fichier multi-classes détecté (une ligne = une classe) : numéros attribués "
-                        "automatiquement, classe par classe puis par ordre alphabétique du nom.")
+            auto_msg = tr("csv_multi_class_detected")
 
     if not roster:
-        raise ValueError(
-            "Impossible de comprendre ce fichier CSV. Formats reconnus : « numero;nom;classe », "
-            "« nom;classe » (sans numéro), ou une ligne par classe « classe;élève1;élève2;... »."
-        )
+        raise ValueError(tr("csv_unrecognized_format"))
     return roster, auto_msg
 
 
@@ -180,24 +189,22 @@ def export_roster_csv(path, roster):
 
 
 def smart_load_roster_with_export(path):
-    """smart_load_roster + enregistrement automatique d'un CSV au format
-    standard si des numéros ont été attribués automatiquement. Retourne
-    (roster, chemin_a_utiliser_ensuite, message_ou_None)."""
+    """smart_load_roster + automatically saves a standard-format CSV if
+    numbers were assigned automatically. Returns (roster,
+    path_to_use_next, message_or_None)."""
     roster, message = smart_load_roster(path)
     if message:
         base, _ext = os.path.splitext(path)
         export_path = base + "_numerote.csv"
         export_roster_csv(export_path, roster)
-        message += f"\n\nFichier au format standard enregistré :\n{export_path}\n\nUtilise ce fichier (et non " \
-                    "l'original) pour la correction des copies : il contient les numéros attribués aux élèves."
+        message += tr("csv_standard_saved", path=export_path)
         return roster, export_path, message
     return roster, path, None
 
 
 def suggest_class_name(roster):
-    """Devine un nom de classe par défaut pour 'Enregistrer en mémoire' :
-    la valeur de 'classe' la plus fréquente dans le roster, s'il y en a
-    une."""
+    """Guesses a default class name for 'Save to memory': the most
+    frequent 'classe' value in the roster, if any."""
     from collections import Counter
     classes = [info.get("classe", "").strip() for info in roster.values() if info.get("classe", "").strip()]
     if classes:
@@ -206,14 +213,14 @@ def suggest_class_name(roster):
 
 
 # ---------------------------------------------------------------------
-# Génération de feuilles pour une liste de numéros ARBITRAIRE (pas
-# forcément consécutive) — cas d'un CSV classe déjà existant où chaque
-# élève a déjà un numéro attribué. Reprend exactement la même boucle de
-# pavage que build_batch (generate_sheet_modular.py), seul le choix des
-# numéros change ; le dessin lui-même (draw_sheet) n'est pas touché.
+# Sheet generation for an ARBITRARY (not necessarily consecutive) list
+# of numbers -- case of an already-existing class CSV where each student
+# already has a number assigned. Reuses exactly the same tiling loop as
+# build_batch (generate_sheet_modular.py), only the choice of numbers
+# changes; the drawing itself (draw_sheet) is untouched.
 # ---------------------------------------------------------------------
 def build_for_numbers(path, cfg, numbers, identities=None):
-    """identities : {numero (int): (nom, classe)} optionnel — cf.
+    """identities: {numero (int): (nom, classe)} optional -- see
     generate_sheet_modular.build_batch."""
     from reportlab.pdfgen import canvas
     from reportlab.lib.units import mm as MM
@@ -252,13 +259,13 @@ def build_for_numbers(path, cfg, numbers, identities=None):
 
 
 def run_in_background(widget, work, on_done):
-    """Exécute `work()` dans un thread séparé (pour ne pas geler la
-    fenêtre) puis rappelle `on_done(error, result)` sur le thread
-    principal Tkinter via `.after()`."""
+    """Runs `work()` in a separate thread (so the window doesn't freeze)
+    then calls back `on_done(error, result)` on the main Tkinter thread
+    via `.after()`."""
     def runner():
         try:
             result = work()
-        except Exception as exc:  # noqa: BLE001 - on veut tout attraper pour l'afficher
+        except Exception as exc:  # noqa: BLE001 - catch everything to display it
             err = (exc, traceback.format_exc())
             widget.after(0, lambda: on_done(err, None))
         else:
@@ -267,17 +274,16 @@ def run_in_background(widget, work, on_done):
 
 
 def offer_csv_template(parent):
-    """Crée un modèle de CSV classe (colonnes numero,nom,classe) prêt à
-    être complété dans Excel/LibreOffice, puis l'ouvre. Le numéro de
-    chaque ligne doit correspondre au numéro imprimé sur la feuille-
-    réponse de l'élève correspondant."""
-    n = simpledialog.askinteger(APP_TITLE, "Combien d'élèves (lignes) dans le modèle ?",
+    """Creates a class CSV template (columns numero,nom,classe) ready to
+    be filled in in Excel/LibreOffice, then opens it. The number on each
+    row must match the number printed on that student's answer sheet."""
+    n = simpledialog.askinteger(APP_TITLE, tr("template_ask_count"),
                                  initialvalue=30, minvalue=1, maxvalue=255, parent=parent)
     if not n:
         return None
     path = filedialog.asksaveasfilename(
-        title="Enregistrer le modèle de CSV classe", defaultextension=".csv",
-        initialfile="modele_classe.csv", filetypes=[("Fichier CSV", "*.csv")], parent=parent)
+        title=tr("template_save_title"), defaultextension=".csv",
+        initialfile="modele_classe.csv", filetypes=[(tr("file_csv"), "*.csv")], parent=parent)
     if not path:
         return None
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
@@ -285,11 +291,7 @@ def offer_csv_template(parent):
         w.writerow(["numero", "nom", "classe"])
         for i in range(1, n + 1):
             w.writerow([i, "", ""])
-    messagebox.showinfo(APP_TITLE, f"Modèle créé :\n{path}\n\n"
-                                    "Complète la colonne « nom » (et « classe » si besoin) dans Excel ou "
-                                    "LibreOffice, enregistre le fichier, puis charge-le avec « Parcourir… ».\n\n"
-                                    "Le numéro de chaque ligne doit correspondre au numéro imprimé sur la "
-                                    "feuille-réponse de cet élève.")
+    messagebox.showinfo(APP_TITLE, tr("template_created", path=path))
     os.startfile(path)
     return path
 
@@ -313,10 +315,9 @@ GRID_CELL_SIZE = 34
 
 
 def grid_header_cell(parent, text):
-    """Cellule d'en-tête (lettre A/B/C...) de largeur FIXE, pour que les
-    lettres restent alignées avec les cases à cocher en dessous (un
-    Label et un Checkbutton de même 'width' ne font pas la même largeur
-    réelle à l'écran)."""
+    """Fixed-WIDTH header cell (letter A/B/C...), so the letters stay
+    aligned with the checkboxes below (a Label and a Checkbutton with the
+    same 'width' don't end up the same actual width on screen)."""
     cell = tk.Frame(parent, width=GRID_CELL_SIZE, height=22)
     cell.pack_propagate(False)
     cell.pack(side="left")
@@ -331,8 +332,8 @@ def grid_check_cell(parent, var):
 
 
 class ScrollableFrame(ttk.Frame):
-    """Cadre avec ascenseur vertical, utilisé pour la grille du corrigé
-    (jusqu'à 64 questions) et pour le détail d'une copie."""
+    """Frame with a vertical scrollbar, used for the answer-key grid (up
+    to 64 questions) and for a copy's detail view."""
 
     def __init__(self, master, height=420, **kwargs):
         super().__init__(master, **kwargs)
@@ -367,7 +368,7 @@ class ScrollableFrame(ttk.Frame):
 
 
 # ---------------------------------------------------------------------
-# Onglet 1 : génération des feuilles-réponses
+# Tab 1: answer sheet generation
 # ---------------------------------------------------------------------
 class GenerateTab(ttk.Frame):
     def __init__(self, master):
@@ -375,56 +376,61 @@ class GenerateTab(ttk.Frame):
         self.settings = app_config.load_settings()
         self.roster_mode = tk.StringVar(value="manuel")
         self.csv_path = tk.StringVar(value="")
-        self.loaded_csv_roster = None  # list de (numero, nom, classe)
+        self.loaded_csv_roster = None  # {numero: {"nom":..., "classe":...}}
         self._build_ui()
 
     def _build_ui(self):
         s = self.settings
 
-        form = ttk.LabelFrame(self, text="Feuille-réponse", padding=10)
+        form = ttk.LabelFrame(self, text=tr("gen_sheet_group"), padding=10)
         form.pack(fill="x", pady=(0, 10))
         form.columnconfigure(1, weight=1)
 
         row = 0
-        ttk.Label(form, text="Titre :").grid(row=row, column=0, sticky="w", pady=3)
-        self.title_var = tk.StringVar(value=s.get("title", "Contrôle"))
+        ttk.Label(form, text=tr("gen_title_label")).grid(row=row, column=0, sticky="w", pady=3)
+        self.title_var = tk.StringVar(value=s.get("title", tr("gen_title_default")))
         ttk.Entry(form, textvariable=self.title_var, width=40).grid(row=row, column=1, sticky="we", padx=5)
 
         row += 1
-        ttk.Label(form, text="Sous-titre :").grid(row=row, column=0, sticky="w", pady=3)
-        self.subtitle_var = tk.StringVar(value=s.get("subtitle", "QCM Physique-Chimie"))
+        ttk.Label(form, text=tr("gen_subtitle_label")).grid(row=row, column=0, sticky="w", pady=3)
+        self.subtitle_var = tk.StringVar(value=s.get("subtitle", tr("gen_subtitle_default")))
         ttk.Entry(form, textvariable=self.subtitle_var, width=40).grid(row=row, column=1, sticky="we", padx=5)
 
         row += 1
-        ttk.Label(form, text="Nombre de questions (1 à 64) :").grid(row=row, column=0, sticky="w", pady=3)
+        ttk.Label(form, text=tr("gen_n_questions_label")).grid(row=row, column=0, sticky="w", pady=3)
         self.n_questions_var = tk.IntVar(value=s.get("n_questions", 12))
         ttk.Spinbox(form, from_=1, to=MAX_QUESTIONS, textvariable=self.n_questions_var, width=8).grid(
             row=row, column=1, sticky="w", padx=5)
 
         row += 1
-        ttk.Label(form, text="Nombre de réponses par question (3 à 6) :").grid(row=row, column=0, sticky="w", pady=3)
+        ttk.Label(form, text=tr("gen_n_choices_label")).grid(row=row, column=0, sticky="w", pady=3)
         self.n_choices_var = tk.IntVar(value=s.get("n_choices", 5))
         ttk.Spinbox(form, from_=3, to=6, textvariable=self.n_choices_var, width=8).grid(
             row=row, column=1, sticky="w", padx=5)
 
         row += 1
         self.show_classe_var = tk.BooleanVar(value=s.get("show_classe", True))
-        ttk.Checkbutton(form, text="Afficher un champ « Classe »", variable=self.show_classe_var).grid(
+        ttk.Checkbutton(form, text=tr("gen_show_classe"), variable=self.show_classe_var).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=3)
 
         row += 1
-        ttk.Label(form, text="Taille de la feuille :").grid(row=row, column=0, sticky="w", pady=3)
-        self.preset_var = tk.StringVar(value=s.get("preset", list(SIZE_PRESETS.keys())[0]))
-        ttk.Combobox(form, textvariable=self.preset_var, values=list(SIZE_PRESETS.keys()),
+        ttk.Label(form, text=tr("gen_sheet_size")).grid(row=row, column=0, sticky="w", pady=3)
+        self._preset_labels = [tr(f"preset_{pid}") for pid in SIZE_PRESET_IDS]
+        self._preset_label_to_id = dict(zip(self._preset_labels, SIZE_PRESET_IDS))
+        stored_preset_id = s.get("preset_id", SIZE_PRESET_IDS[0])
+        if stored_preset_id not in SIZE_PRESET_IDS:
+            stored_preset_id = SIZE_PRESET_IDS[0]
+        self.preset_var = tk.StringVar(value=tr(f"preset_{stored_preset_id}"))
+        ttk.Combobox(form, textvariable=self.preset_var, values=self._preset_labels,
                      state="readonly", width=38).grid(row=row, column=1, sticky="we", padx=5)
 
-        roster_frame = ttk.LabelFrame(self, text="Élèves", padding=10)
+        roster_frame = ttk.LabelFrame(self, text=tr("gen_students_group"), padding=10)
         roster_frame.pack(fill="x", pady=(0, 10))
 
         modes = [
-            ("manuel", "Saisir la liste des noms maintenant"),
-            ("csv", "J'ai déjà un fichier CSV (numero,nom,classe)"),
-            ("aucun", "Pas de liste pour l'instant (juste des numéros)"),
+            ("manuel", tr("gen_mode_manual")),
+            ("csv", tr("gen_mode_csv")),
+            ("aucun", tr("gen_mode_none")),
         ]
         for value, label in modes:
             mode_row = ttk.Frame(roster_frame)
@@ -432,16 +438,16 @@ class GenerateTab(ttk.Frame):
             ttk.Radiobutton(mode_row, text=label, variable=self.roster_mode, value=value,
                             command=self._on_roster_mode_change).pack(side="left", anchor="w")
             if value == "csv":
-                ttk.Button(mode_row, text="Créer un modèle…", command=lambda: offer_csv_template(self)).pack(
+                ttk.Button(mode_row, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
                     side="left", padx=10)
 
         self.manual_frame = ttk.Frame(roster_frame)
-        ttk.Label(self.manual_frame, text="Un nom par ligne (l'ordre donne le numéro de feuille) :").pack(anchor="w")
+        ttk.Label(self.manual_frame, text=tr("gen_manual_names_hint")).pack(anchor="w")
         self.names_text = tk.Text(self.manual_frame, height=8, width=45)
         self.names_text.pack(fill="x", pady=3)
         classe_row = ttk.Frame(self.manual_frame)
         classe_row.pack(fill="x")
-        ttk.Label(classe_row, text="Classe (facultatif, appliquée à tous) :").pack(side="left")
+        ttk.Label(classe_row, text=tr("gen_manual_classe_label")).pack(side="left")
         self.manual_classe_var = tk.StringVar(value=s.get("last_classe", ""))
         ttk.Entry(classe_row, textvariable=self.manual_classe_var, width=15).pack(side="left", padx=5)
 
@@ -449,12 +455,12 @@ class GenerateTab(ttk.Frame):
         csv_row = ttk.Frame(self.csv_frame)
         csv_row.pack(fill="x", pady=3)
         ttk.Entry(csv_row, textvariable=self.csv_path, width=40).pack(side="left", fill="x", expand=True)
-        ttk.Button(csv_row, text="Parcourir…", command=self._browse_csv).pack(side="left", padx=5)
+        ttk.Button(csv_row, text=tr("btn_browse"), command=self._browse_csv).pack(side="left", padx=5)
         csv_row2 = ttk.Frame(self.csv_frame)
         csv_row2.pack(fill="x", pady=(0, 3))
-        ttk.Button(csv_row2, text="Tableau élèves (voir/modifier/mémoire)…",
+        ttk.Button(csv_row2, text=tr("gen_roster_table_btn"),
                    command=self._open_roster_manager).pack(side="left")
-        ttk.Button(csv_row2, text="Enregistrer cette classe en mémoire",
+        ttk.Button(csv_row2, text=tr("gen_save_class_btn"),
                    command=self._save_class_to_memory).pack(side="left", padx=5)
         self.csv_info_label = ttk.Label(self.csv_frame, text="", foreground="#555555")
         self.csv_info_label.pack(anchor="w")
@@ -462,56 +468,55 @@ class GenerateTab(ttk.Frame):
         self.aucun_frame = ttk.Frame(roster_frame)
         n_row = ttk.Frame(self.aucun_frame)
         n_row.pack(fill="x", pady=3)
-        ttk.Label(n_row, text="Nombre de feuilles à générer :").pack(side="left")
+        ttk.Label(n_row, text=tr("gen_n_sheets_label")).pack(side="left")
         self.n_sheets_var = tk.IntVar(value=s.get("n_sheets", 30))
         ttk.Spinbox(n_row, from_=1, to=255, textvariable=self.n_sheets_var, width=8).pack(side="left", padx=5)
         start_row = ttk.Frame(self.aucun_frame)
         start_row.pack(fill="x", pady=3)
-        ttk.Label(start_row, text="Numéro de départ :").pack(side="left")
+        ttk.Label(start_row, text=tr("gen_start_number_label")).pack(side="left")
         self.start_number_var = tk.IntVar(value=s.get("start_number", 1))
         ttk.Spinbox(start_row, from_=1, to=255, textvariable=self.start_number_var, width=8).pack(side="left", padx=5)
 
         identity_frame = ttk.Frame(roster_frame)
         identity_frame.pack(fill="x", pady=(8, 0), anchor="w")
         self.print_name_var = tk.BooleanVar(value=s.get("print_name", False))
-        ttk.Checkbutton(identity_frame, text="Écrire le nom des élèves directement sur la fiche",
+        ttk.Checkbutton(identity_frame, text=tr("gen_print_name"),
                         variable=self.print_name_var).pack(anchor="w")
         self.print_classe_var = tk.BooleanVar(value=s.get("print_classe", False))
-        ttk.Checkbutton(identity_frame, text="Écrire la classe des élèves directement sur la fiche",
+        ttk.Checkbutton(identity_frame, text=tr("gen_print_classe"),
                         variable=self.print_classe_var).pack(anchor="w")
-        ttk.Label(identity_frame, text="(sinon, une ligne vierge est imprimée pour que l'élève l'écrive à la main)",
+        ttk.Label(identity_frame, text=tr("gen_print_hint"),
                   foreground="#777777").pack(anchor="w")
 
         self.extra_blank_frame = ttk.Frame(identity_frame)
         self.extra_blank_enabled_var = tk.BooleanVar(value=s.get("extra_blank_enabled", False))
-        ttk.Checkbutton(self.extra_blank_frame, text="Générer", variable=self.extra_blank_enabled_var).pack(
-            side="left")
+        ttk.Checkbutton(self.extra_blank_frame, text=tr("gen_extra_blank_generate"),
+                        variable=self.extra_blank_enabled_var).pack(side="left")
         self.extra_blank_n_var = tk.IntVar(value=s.get("extra_blank_n", 3))
         ttk.Spinbox(self.extra_blank_frame, from_=1, to=10, textvariable=self.extra_blank_n_var, width=4).pack(
             side="left", padx=5)
-        ttk.Label(self.extra_blank_frame,
-                  text="fiche(s) supplémentaire(s) sans nom ni classe pré-remplis (absents, retirages…)").pack(
-            side="left")
+        ttk.Label(self.extra_blank_frame, text=tr("gen_extra_blank_label")).pack(side="left")
         self.print_name_var.trace_add("write", self._update_extra_blank_visibility)
         self.print_classe_var.trace_add("write", self._update_extra_blank_visibility)
         self._update_extra_blank_visibility()
 
         self._on_roster_mode_change()
 
-        out_frame = ttk.LabelFrame(self, text="Dossier de sortie", padding=10)
+        out_frame = ttk.LabelFrame(self, text=tr("gen_output_group"), padding=10)
         out_frame.pack(fill="x", pady=(0, 10))
         self.output_dir_var = tk.StringVar(
-            value=s.get("generate_output_dir", os.path.join(app_config.default_documents_dir(), "Feuilles générées")))
+            value=s.get("generate_output_dir",
+                         os.path.join(app_config.default_documents_dir(), tr("gen_output_dir_default"))))
         row2 = ttk.Frame(out_frame)
         row2.pack(fill="x")
         ttk.Entry(row2, textvariable=self.output_dir_var, width=50).pack(side="left", fill="x", expand=True)
-        ttk.Button(row2, text="Parcourir…", command=self._browse_output_dir).pack(side="left", padx=5)
+        ttk.Button(row2, text=tr("btn_browse"), command=self._browse_output_dir).pack(side="left", padx=5)
 
         action_row = ttk.Frame(self)
         action_row.pack(fill="x", pady=6)
-        self.preview_btn = ttk.Button(action_row, text="Générer un aperçu", command=self._on_preview)
+        self.preview_btn = ttk.Button(action_row, text=tr("gen_btn_preview"), command=self._on_preview)
         self.preview_btn.pack(side="left")
-        self.generate_btn = ttk.Button(action_row, text="Générer le PDF", command=self._on_generate)
+        self.generate_btn = ttk.Button(action_row, text=tr("gen_btn_generate"), command=self._on_generate)
         self.generate_btn.pack(side="left", padx=(8, 0))
         self.progress = ttk.Progressbar(action_row, mode="indeterminate", length=200)
         self.progress.pack(side="left", padx=10)
@@ -538,27 +543,26 @@ class GenerateTab(ttk.Frame):
             self.aucun_frame.pack(fill="x", pady=(6, 0))
 
     def _browse_csv(self):
-        path = filedialog.askopenfilename(title="Choisir le fichier CSV de la classe",
-                                           filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")])
+        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
+                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
         if not path:
             return
         try:
             roster, use_path, message = smart_load_roster_with_export(path)
         except (OSError, KeyError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Impossible de lire ce fichier CSV.\n\nDétail : {exc}")
+            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
             return
         if message:
             messagebox.showinfo(APP_TITLE, message)
         self.csv_path.set(use_path)
         self.loaded_csv_roster = roster
-        self.csv_info_label.config(text=f"{len(roster)} élève(s) chargé(s), numéros {min(roster)} à {max(roster)}.")
+        self.csv_info_label.config(text=tr("csv_loaded_with_range", n=len(roster), min=min(roster), max=max(roster)))
 
     def _open_roster_manager(self):
         def on_apply(roster, name):
             self.loaded_csv_roster = roster
-            self.csv_path.set(f"(classe en mémoire : {name})" if name else "(tableau modifié manuellement)")
-            self.csv_info_label.config(
-                text=f"{len(roster)} élève(s) chargé(s), numéros {min(roster)} à {max(roster)}.")
+            self.csv_path.set(tr("csv_path_from_memory", name=name) if name else tr("csv_path_manual_edit"))
+            self.csv_info_label.config(text=tr("csv_loaded_with_range", n=len(roster), min=min(roster), max=max(roster)))
             self.roster_mode.set("csv")
             self._on_roster_mode_change()
 
@@ -570,30 +574,30 @@ class GenerateTab(ttk.Frame):
     def _save_class_to_memory(self):
         roster = self.loaded_csv_roster
         if not roster:
-            messagebox.showwarning(APP_TITLE, "Charge d'abord une liste d'élèves (CSV) avant de l'enregistrer "
-                                                "en mémoire.")
+            messagebox.showwarning(APP_TITLE, tr("gen_roster_load_warn"))
             return
         suggested = suggest_class_name(roster)
-        name = simpledialog.askstring(APP_TITLE, "Nom de la classe à enregistrer en mémoire :",
+        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"),
                                        initialvalue=suggested, parent=self)
         if not name or not name.strip():
             return
         name = name.strip()
         if name in class_store.list_classes():
-            if not messagebox.askyesno(APP_TITLE, f"Une classe « {name} » existe déjà en mémoire. La remplacer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
         class_store.save_class(name, roster)
-        messagebox.showinfo(APP_TITLE, f"Classe « {name} » enregistrée en mémoire ({len(roster)} élève(s)).")
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
 
     def _browse_output_dir(self):
-        d = filedialog.askdirectory(title="Choisir le dossier de sortie")
+        d = filedialog.askdirectory(title=tr("gen_choose_output_dir"))
         if d:
             self.output_dir_var.set(d)
 
     def _build_config(self):
-        preset = SIZE_PRESETS[self.preset_var.get()]
+        preset_id = self._preset_label_to_id.get(self.preset_var.get(), SIZE_PRESET_IDS[0])
+        preset = SIZE_PRESET_PARAMS[preset_id]
         return SheetConfig(
-            title=self.title_var.get().strip() or "Contrôle",
+            title=self.title_var.get().strip() or tr("gen_title_default"),
             subtitle=self.subtitle_var.get().strip(),
             n_questions=int(self.n_questions_var.get()),
             n_choices=int(self.n_choices_var.get()),
@@ -608,7 +612,8 @@ class GenerateTab(ttk.Frame):
         s.update(dict(
             title=self.title_var.get(), subtitle=self.subtitle_var.get(),
             n_questions=int(self.n_questions_var.get()), n_choices=int(self.n_choices_var.get()),
-            show_classe=bool(self.show_classe_var.get()), preset=self.preset_var.get(),
+            show_classe=bool(self.show_classe_var.get()),
+            preset_id=self._preset_label_to_id.get(self.preset_var.get(), SIZE_PRESET_IDS[0]),
             n_sheets=int(self.n_sheets_var.get()), start_number=int(self.start_number_var.get()),
             last_classe=self.manual_classe_var.get(), generate_output_dir=self.output_dir_var.get(),
             print_name=bool(self.print_name_var.get()), print_classe=bool(self.print_classe_var.get()),
@@ -622,7 +627,7 @@ class GenerateTab(ttk.Frame):
             cfg = self._build_config()
             cfg.validate()
         except (tk.TclError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Configuration invalide :\n\n{exc}")
+            messagebox.showerror(APP_TITLE, tr("gen_invalid_config", detail=exc))
             return
 
         n_tiles = cfg.tiles_rows * cfg.tiles_cols
@@ -631,7 +636,7 @@ class GenerateTab(ttk.Frame):
         try:
             build(preview_path, cfg, numbers=list(range(1, n_tiles + 1)))
         except Exception as exc:  # noqa: BLE001
-            messagebox.showerror(APP_TITLE, f"Impossible de générer l'aperçu :\n\n{exc}")
+            messagebox.showerror(APP_TITLE, tr("gen_preview_failed", detail=exc))
             return
         os.startfile(preview_path)
 
@@ -639,7 +644,7 @@ class GenerateTab(ttk.Frame):
         try:
             cfg = self._build_config()
         except (tk.TclError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Configuration invalide : {exc}")
+            messagebox.showerror(APP_TITLE, tr("gen_invalid_config_short", detail=exc))
             return
 
         mode = self.roster_mode.get()
@@ -648,13 +653,12 @@ class GenerateTab(ttk.Frame):
             raw = self.names_text.get("1.0", "end").splitlines()
             names = [n.strip() for n in raw if n.strip()]
             if not names:
-                messagebox.showwarning(APP_TITLE, "Merci de saisir au moins un nom, ou choisis une autre option "
-                                                    "pour la liste d'élèves.")
+                messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
                 return
             classe_for_all = self.manual_classe_var.get().strip()
         elif mode == "csv":
             if not self.loaded_csv_roster:
-                messagebox.showwarning(APP_TITLE, "Merci de choisir un fichier CSV valide.")
+                messagebox.showwarning(APP_TITLE, tr("gen_csv_required"))
                 return
             roster_rows = self.loaded_csv_roster
             numbers_from_csv = sorted(roster_rows.keys())
@@ -663,12 +667,12 @@ class GenerateTab(ttk.Frame):
         try:
             os.makedirs(output_dir, exist_ok=True)
         except OSError as exc:
-            messagebox.showerror(APP_TITLE, f"Impossible d'utiliser ce dossier de sortie : {exc}")
+            messagebox.showerror(APP_TITLE, tr("gen_output_dir_error", detail=exc))
             return
 
         self.generate_btn.config(state="disabled")
         self.progress.start(12)
-        self.status_label.config(text="Génération en cours…")
+        self.status_label.config(text=tr("gen_generating"))
 
         def work():
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -720,51 +724,49 @@ class GenerateTab(ttk.Frame):
             self.generate_btn.config(state="normal")
             if err:
                 exc, tb = err
-                messagebox.showerror(APP_TITLE, f"Échec de la génération :\n\n{exc}")
+                messagebox.showerror(APP_TITLE, tr("gen_failed", detail=exc))
                 self.status_label.config(text="")
                 return
             pdf_path, csv_path, generated_numbers, used_cfg, n_extra = result
             self._save_settings()
-            rv = " (recto-verso automatique)" if needs_recto_verso(used_cfg) else ""
-            msg = (f"{len(generated_numbers)} feuille(s) générée(s), numéros "
-                   f"{min(generated_numbers)} à {max(generated_numbers)}{rv}.\nPDF : {pdf_path}")
+            rv = tr("gen_rv_suffix") if needs_recto_verso(used_cfg) else ""
+            msg = tr("gen_success_summary", n=len(generated_numbers), start=min(generated_numbers),
+                      end=max(generated_numbers), rv=rv, path=pdf_path)
             if n_extra:
                 extra_start = max(generated_numbers) - n_extra + 1
-                msg += (f"\nDont {n_extra} fiche(s) vierge(s) supplémentaire(s) sans nom ni classe pré-remplis "
-                        f"(numéros {extra_start} à {max(generated_numbers)}).")
+                msg += tr("gen_extra_blank_summary", n=n_extra, start=extra_start, end=max(generated_numbers))
             if csv_path:
-                msg += f"\nCSV classe : {csv_path}"
+                msg += tr("gen_csv_class_line", path=csv_path)
             self.status_label.config(text=msg)
-            if messagebox.askyesno(APP_TITLE, msg + "\n\nOuvrir le dossier maintenant ?"):
+            if messagebox.askyesno(APP_TITLE, msg + tr("gen_open_folder_now")):
                 os.startfile(output_dir)
 
         run_in_background(self, work, on_done)
 
 
 # ---------------------------------------------------------------------
-# Fenêtre de saisie du corrigé (facultatif)
+# Answer key entry window (optional)
 # ---------------------------------------------------------------------
 class AnswerKeyDialog(tk.Toplevel):
     def __init__(self, master, n_questions, n_choices, existing_key=None):
         super().__init__(master)
-        self.title("Corrigé — sélectionner la ou les bonnes réponses")
+        self.title(tr("ak_title"))
         self.geometry("560x600")
         self.result = None
         self._initial_key = existing_key or {}
         self.letters = []
         self.vars = {}
 
-        ttk.Label(self, text="Coche la ou les bonnes réponses pour chaque question.\n"
-                              "Laisse une question sans coche pour l'exclure de la notation.",
+        ttk.Label(self, text=tr("ak_hint"),
                   justify="left", wraplength=520).pack(fill="x", padx=10, pady=8)
 
         top_row = ttk.Frame(self)
         top_row.pack(fill="x", padx=10)
-        ttk.Label(top_row, text="Nombre de questions :").pack(side="left")
+        ttk.Label(top_row, text=tr("ak_n_questions_label")).pack(side="left")
         self.n_q_var = tk.IntVar(value=n_questions)
         ttk.Spinbox(top_row, from_=1, to=MAX_QUESTIONS, textvariable=self.n_q_var, width=6,
                     command=self._rebuild_grid).pack(side="left", padx=5)
-        ttk.Label(top_row, text="Nombre de réponses par question :").pack(side="left", padx=(15, 0))
+        ttk.Label(top_row, text=tr("ak_n_choices_label")).pack(side="left", padx=(15, 0))
         self.n_choices_var = tk.IntVar(value=n_choices)
         ttk.Spinbox(top_row, from_=3, to=6, textvariable=self.n_choices_var, width=6,
                     command=self._rebuild_grid).pack(side="left", padx=5)
@@ -776,9 +778,9 @@ class AnswerKeyDialog(tk.Toplevel):
 
         btn_row = ttk.Frame(self)
         btn_row.pack(fill="x", padx=10, pady=8)
-        ttk.Button(btn_row, text="Tout effacer", command=self._clear_all).pack(side="left")
-        ttk.Button(btn_row, text="Annuler", command=self.destroy).pack(side="right")
-        ttk.Button(btn_row, text="Valider", command=self._on_validate).pack(side="right", padx=5)
+        ttk.Button(btn_row, text=tr("ak_clear_all"), command=self._clear_all).pack(side="left")
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("btn_validate"), command=self._on_validate).pack(side="right", padx=5)
 
         self.transient(master)
         self.grab_set()
@@ -795,8 +797,8 @@ class AnswerKeyDialog(tk.Toplevel):
         return key
 
     def _rebuild_grid(self):
-        # Préserve les cases déjà cochées quand on change le nombre de
-        # questions ou de réponses (sinon changer l'un efface l'autre).
+        # Preserves already-checked boxes when the number of questions or
+        # choices changes (otherwise changing one clears the other).
         prev_key = self._current_key() if self.vars else self._initial_key
         for child in self.scroll.inner.winfo_children():
             child.destroy()
@@ -806,7 +808,7 @@ class AnswerKeyDialog(tk.Toplevel):
         self.letters = ["A", "B", "C", "D", "E", "F"][:n_c]
         header = ttk.Frame(self.scroll.inner)
         header.pack(fill="x")
-        ttk.Label(header, text="Question", width=10).pack(side="left")
+        ttk.Label(header, text=tr("ak_question_col"), width=10).pack(side="left")
         for letter in self.letters:
             grid_header_cell(header, letter)
         for q in range(1, n_q + 1):
@@ -826,8 +828,7 @@ class AnswerKeyDialog(tk.Toplevel):
             if letters:
                 key[q] = letters
         if not key:
-            if not messagebox.askyesno(APP_TITLE, "Aucune bonne réponse cochée : la notation sera désactivée. "
-                                                    "Continuer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("ak_no_key_confirm")):
                 return
             self.result = {}
         else:
@@ -836,8 +837,8 @@ class AnswerKeyDialog(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------
-# Fenêtre de détail d'une copie (association manuelle, correction des
-# réponses détectées, visualisation de la zone Nom/Classe recadrée).
+# Copy detail window (manual matching, editing detected answers,
+# viewing the cropped Name/Class area).
 # ---------------------------------------------------------------------
 class DetailDialog(tk.Toplevel):
     def __init__(self, master, entry, roster, on_save):
@@ -846,24 +847,24 @@ class DetailDialog(tk.Toplevel):
         self.roster = roster or {}
         self.on_save = on_save
         num = entry.get("sheet_number")
-        num_label = f"n°{num}" if num is not None else "(numéro non renseigné)"
-        self.title(f"Feuille {num_label}")
-        self.geometry("640x680")
+        num_label = tr("dd_number_label", num=num) if num is not None else tr("dd_number_unset")
+        self.title(tr("dd_title", num=num_label))
 
         status = entry.get("status")
         header = ttk.Frame(self, padding=10)
         header.pack(fill="x")
-        ttk.Label(header, text=f"Feuille {num_label} — {STATUS_LABELS.get(status, status)}",
+        ttk.Label(header, text=tr("dd_header", num=num_label, status=status_label(status)),
                   font=("Segoe UI", 11, "bold")).pack(anchor="w")
         if status == "face_manquante":
-            faces = ", ".join("recto" if s == 0 else "verso" for s in entry.get("missing_sides", []))
-            ttk.Label(header, text=f"Face(s) manquante(s) : {faces}. Rescanne la face manquante puis "
-                                    "relance la correction — cette feuille ne peut pas être corrigée ici.",
+            faces = ", ".join(tr("dd_side_recto") if s == 0 else tr("dd_side_verso")
+                               for s in entry.get("missing_sides", []))
+            ttk.Label(header, text=tr("dd_missing_sides", faces=faces),
                       wraplength=580, foreground="#a05a00", justify="left").pack(anchor="w", pady=4)
             expected = self.roster.get(num)
             if expected:
-                ttk.Label(header, text=f"Élève attendu (d'après le CSV) : {expected['nom']}").pack(anchor="w")
-            ttk.Button(self, text="Fermer", command=self.destroy).pack(pady=10)
+                ttk.Label(header, text=tr("dd_expected_student", name=expected['nom'])).pack(anchor="w")
+            ttk.Button(self, text=tr("btn_close"), command=self.destroy).pack(pady=10)
+            self.geometry("640x680")
             self.transient(master)
             self.grab_set()
             return
@@ -879,23 +880,23 @@ class DetailDialog(tk.Toplevel):
                 self._photo = cv2_to_photoimage(crop)
                 ttk.Label(img_frame, image=self._photo).pack(anchor="w", pady=4)
         else:
-            ttk.Label(img_frame, text="(zone Nom/Classe non disponible pour cette feuille)",
+            ttk.Label(img_frame, text=tr("dd_no_crop"),
                       foreground="#777777").pack(anchor="w")
         sources = entry.get("sources") or []
         if sources:
-            ttk.Button(img_frame, text="Ouvrir la photo d'origine",
+            ttk.Button(img_frame, text=tr("dd_open_original"),
                        command=lambda: os.startfile(sources[0])).pack(anchor="w", pady=(0, 6))
 
         identity_frame = ttk.Frame(self, padding=10)
         identity_frame.pack(fill="x")
-        ttk.Label(identity_frame, text="Élève :").grid(row=0, column=0, sticky="w")
+        ttk.Label(identity_frame, text=tr("dd_student_label")).grid(row=0, column=0, sticky="w")
         self.nom_var = tk.StringVar(value=entry.get("eleve", ""))
         ttk.Entry(identity_frame, textvariable=self.nom_var, width=30).grid(row=0, column=1, sticky="w", padx=5)
-        ttk.Label(identity_frame, text="Classe :").grid(row=0, column=2, sticky="w", padx=(15, 0))
+        ttk.Label(identity_frame, text=tr("dd_class_label")).grid(row=0, column=2, sticky="w", padx=(15, 0))
         self.classe_var = tk.StringVar(value=entry.get("classe", ""))
         ttk.Entry(identity_frame, textvariable=self.classe_var, width=12).grid(row=0, column=3, sticky="w", padx=5)
 
-        ttk.Label(self, text="Réponses détectées (modifiables ; les lignes orange sont incertaines) :",
+        ttk.Label(self, text=tr("dd_answers_hint"),
                   padding=(10, 4)).pack(anchor="w")
         self.scroll = ScrollableFrame(self, height=300)
         self.scroll.pack(fill="both", expand=True, padx=10, pady=4)
@@ -914,14 +915,15 @@ class DetailDialog(tk.Toplevel):
             self.answer_vars[q] = v
             ttk.Entry(row, textvariable=v, width=10).pack(side="left", padx=5)
             if flagged:
-                ttk.Label(row, text=f"⚠ à vérifier : {', '.join(qres['flagged'])}",
+                ttk.Label(row, text=tr("dd_to_check", letters=", ".join(qres['flagged'])),
                           foreground="#a05a00").pack(side="left", padx=5)
 
         btn_row = ttk.Frame(self, padding=10)
         btn_row.pack(fill="x")
-        ttk.Button(btn_row, text="Annuler", command=self.destroy).pack(side="right")
-        ttk.Button(btn_row, text="Enregistrer", command=self._on_save_click).pack(side="right", padx=5)
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("btn_save"), command=self._on_save_click).pack(side="right", padx=5)
 
+        self.geometry("640x680")
         self.transient(master)
         self.grab_set()
 
@@ -943,11 +945,11 @@ class DetailDialog(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------
-# Fenêtre de saisie manuelle pour une photo en échec de lecture (repères
-# abîmés/déchirés, feuille trop mal cadrée...). La détection automatique
-# est impossible sans les repères, donc l'enseignant lit lui-même la
-# copie (avec une simple rotation d'affichage pour la remettre à
-# l'endroit) et saisit numéro, élève et réponses à la main.
+# Manual entry window for a photo that failed to read (damaged/torn
+# markers, badly framed sheet...). Automatic detection is impossible
+# without the markers, so the teacher reads the copy themselves (with a
+# simple display rotation to right it) and enters number, student and
+# answers by hand.
 # ---------------------------------------------------------------------
 class ManualEntryDialog(tk.Toplevel):
     def __init__(self, master, entry, roster, default_n_questions, default_n_choices, on_save):
@@ -958,7 +960,7 @@ class ManualEntryDialog(tk.Toplevel):
         self.rotation = 0
         self.vars = {}
         self._photo = None
-        self.title("Saisie manuelle — échec de lecture automatique")
+        self.title(tr("med_title"))
 
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
@@ -968,23 +970,22 @@ class ManualEntryDialog(tk.Toplevel):
         self._img_max_w = int(win_w * 0.45)
         self._img_max_h = win_h - 190
 
-        ttk.Label(self, text=f"Échec de la lecture automatique : {entry.get('erreur', '(raison inconnue)')}\n"
-                              "Regarde la photo ci-contre (pivote-la si besoin) et saisis toi-même le numéro "
-                              "et les réponses.",
+        error_text = entry.get('erreur') or tr("med_unknown_reason")
+        ttk.Label(self, text=tr("med_hint", error=error_text),
                   foreground="#a03030", wraplength=win_w - 20, justify="left", padding=10).pack(fill="x")
 
-        # Boutons épinglés en bas AVANT le contenu principal : ils restent
-        # toujours visibles même si le contenu au-dessus est très grand.
+        # Buttons pinned to the bottom BEFORE the main content: they stay
+        # visible even if the content above is very tall.
         btn_row = ttk.Frame(self, padding=10)
         btn_row.pack(side="bottom", fill="x")
-        ttk.Button(btn_row, text="Annuler", command=self.destroy).pack(side="right")
-        ttk.Button(btn_row, text="Enregistrer les informations saisies", command=self._on_save_click).pack(
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("med_btn_save"), command=self._on_save_click).pack(
             side="right", padx=5)
 
         main_frame = ttk.Frame(self)
         main_frame.pack(fill="both", expand=True, padx=10)
 
-        # --- Colonne de gauche : la photo ---
+        # --- Left column: the photo ---
         left = ttk.Frame(main_frame)
         left.pack(side="left", fill="y", anchor="n")
         self._img_label = ttk.Label(left)
@@ -998,42 +999,42 @@ class ManualEntryDialog(tk.Toplevel):
 
         btn_row_img = ttk.Frame(left)
         btn_row_img.pack(anchor="w", pady=4)
-        ttk.Button(btn_row_img, text="Pivoter 90°", command=self._rotate).pack(side="left")
+        ttk.Button(btn_row_img, text=tr("med_rotate"), command=self._rotate).pack(side="left")
         if self.source:
-            ttk.Button(btn_row_img, text="Ouvrir la photo d'origine",
+            ttk.Button(btn_row_img, text=tr("dd_open_original"),
                        command=lambda: os.startfile(self.source)).pack(side="left", padx=5)
 
-        # --- Colonne de droite : identité + réponses ---
+        # --- Right column: identity + answers ---
         right = ttk.Frame(main_frame)
         right.pack(side="left", fill="both", expand=True, padx=(15, 0))
 
         identity_frame = ttk.Frame(right)
         identity_frame.pack(fill="x", pady=(0, 4))
-        ttk.Label(identity_frame, text="Numéro de la feuille (si lisible) :").grid(
+        ttk.Label(identity_frame, text=tr("med_number_label")).grid(
             row=0, column=0, sticky="w", pady=2)
         self.numero_var = tk.StringVar(value="")
         ttk.Entry(identity_frame, textvariable=self.numero_var, width=8).grid(row=0, column=1, sticky="w", padx=5)
-        ttk.Button(identity_frame, text="Saisir automatiquement le nom",
+        ttk.Button(identity_frame, text=tr("med_autofill_btn"),
                    command=self._on_autofill_name_click).grid(row=0, column=2, sticky="w", padx=5)
-        ttk.Label(identity_frame, text="Élève :").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(identity_frame, text=tr("dd_student_label")).grid(row=1, column=0, sticky="w", pady=2)
         self.nom_var = tk.StringVar(value="")
         ttk.Entry(identity_frame, textvariable=self.nom_var, width=28).grid(row=1, column=1, sticky="w", padx=5)
-        ttk.Label(identity_frame, text="Classe :").grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Label(identity_frame, text=tr("dd_class_label")).grid(row=2, column=0, sticky="w", pady=2)
         self.classe_var = tk.StringVar(value="")
         ttk.Entry(identity_frame, textvariable=self.classe_var, width=12).grid(row=2, column=1, sticky="w", padx=5)
 
         grid_row = ttk.Frame(right)
         grid_row.pack(fill="x", pady=(4, 4))
-        ttk.Label(grid_row, text="Nombre de questions :").pack(side="left")
+        ttk.Label(grid_row, text=tr("med_n_questions_label")).pack(side="left")
         self.n_q_var = tk.IntVar(value=default_n_questions)
         ttk.Spinbox(grid_row, from_=1, to=MAX_QUESTIONS, textvariable=self.n_q_var, width=6,
                     command=self._rebuild_grid).pack(side="left", padx=5)
-        ttk.Label(grid_row, text="Nombre de réponses :").pack(side="left", padx=(15, 0))
+        ttk.Label(grid_row, text=tr("med_n_choices_label")).pack(side="left", padx=(15, 0))
         self.n_c_var = tk.IntVar(value=default_n_choices)
         ttk.Spinbox(grid_row, from_=3, to=6, textvariable=self.n_c_var, width=6,
                     command=self._rebuild_grid).pack(side="left", padx=5)
 
-        ttk.Label(right, text="Coche la ou les réponses cochées par l'élève, pour chaque question :").pack(
+        ttk.Label(right, text=tr("med_answers_hint")).pack(
             anchor="w", pady=(4, 2))
         self.scroll = ScrollableFrame(right, height=max(200, win_h - 340))
         self.scroll.pack(fill="both", expand=True)
@@ -1045,19 +1046,19 @@ class ManualEntryDialog(tk.Toplevel):
     def _on_autofill_name_click(self):
         raw = self.numero_var.get().strip()
         if not raw.isdigit():
-            messagebox.showwarning(APP_TITLE, "Saisis d'abord un numéro de feuille valide.")
+            messagebox.showwarning(APP_TITLE, tr("med_number_required_first"))
             return
         num = int(raw)
         student = self.roster.get(num)
         if not student:
-            messagebox.showinfo(APP_TITLE, f"Aucun élève avec le numéro {num} dans le tableau chargé.")
+            messagebox.showinfo(APP_TITLE, tr("med_no_student_for_number", num=num))
             return
         self.nom_var.set(student["nom"])
         self.classe_var.set(student.get("classe", ""))
 
     def _refresh_image(self):
         if self._raw_img is None:
-            self._img_label.configure(text="(photo introuvable sur le disque)", image="")
+            self._img_label.configure(text=tr("med_photo_missing"), image="")
             return
         import cv2
         img = self._raw_img
@@ -1089,7 +1090,7 @@ class ManualEntryDialog(tk.Toplevel):
         letters = ["A", "B", "C", "D", "E", "F"][:n_c]
         header = ttk.Frame(self.scroll.inner)
         header.pack(fill="x")
-        ttk.Label(header, text="Question", width=10).pack(side="left")
+        ttk.Label(header, text=tr("ak_question_col"), width=10).pack(side="left")
         for letter in letters:
             grid_header_cell(header, letter)
         for q in range(1, n_q + 1):
@@ -1108,11 +1109,10 @@ class ManualEntryDialog(tk.Toplevel):
             try:
                 numero = int(raw_numero)
             except ValueError:
-                messagebox.showwarning(APP_TITLE, "Le numéro de feuille doit être un nombre entier.")
+                messagebox.showwarning(APP_TITLE, tr("med_invalid_number"))
                 return
         if numero is None:
-            if not messagebox.askyesno(APP_TITLE, "Aucun numéro de feuille saisi : la copie sera enregistrée sans "
-                                                    "numéro. Continuer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("med_no_number_confirm")):
                 return
         nom = self.nom_var.get().strip()
         classe = self.classe_var.get().strip()
@@ -1132,49 +1132,49 @@ class ManualEntryDialog(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------
-# Fenêtre unique pour voir/modifier un tableau numero/nom/classe, et
-# gérer les classes enregistrées en mémoire (class_store.py) : charger,
-# enregistrer, renommer, supprimer. Utilisée depuis les deux onglets.
+# Single window to view/edit a numero/nom/classe table, and manage the
+# classes saved to memory (class_store.py): load, save, rename, delete.
+# Used from both tabs.
 # ---------------------------------------------------------------------
 class RosterManagerDialog(tk.Toplevel):
     def __init__(self, master, initial_roster=None, initial_name=None, on_apply=None):
         super().__init__(master)
         self.on_apply = on_apply
         self.rows = []
-        self.title("Tableau élèves — voir, modifier, mémoriser")
+        self.title(tr("rmd_title"))
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
         self.geometry(f"{min(700, int(screen_w * 0.7))}x{min(800, int(screen_h * 0.85))}")
 
-        store_frame = ttk.LabelFrame(self, text="Classes enregistrées en mémoire", padding=10)
+        store_frame = ttk.LabelFrame(self, text=tr("rmd_store_group"), padding=10)
         store_frame.pack(fill="x", padx=10, pady=(10, 6))
         row1 = ttk.Frame(store_frame)
         row1.pack(fill="x")
-        ttk.Label(row1, text="Classe :").pack(side="left")
+        ttk.Label(row1, text=tr("rmd_class_label")).pack(side="left")
         self.store_combo = ttk.Combobox(row1, state="readonly", width=25)
         self.store_combo.pack(side="left", padx=5)
-        ttk.Button(row1, text="Charger", command=self._on_load_from_store).pack(side="left", padx=3)
-        ttk.Button(row1, text="Renommer…", command=self._on_rename_in_store).pack(side="left", padx=3)
-        ttk.Button(row1, text="Supprimer", command=self._on_delete_from_store).pack(side="left", padx=3)
+        ttk.Button(row1, text=tr("btn_load"), command=self._on_load_from_store).pack(side="left", padx=3)
+        ttk.Button(row1, text=tr("btn_rename"), command=self._on_rename_in_store).pack(side="left", padx=3)
+        ttk.Button(row1, text=tr("btn_delete"), command=self._on_delete_from_store).pack(side="left", padx=3)
         self._refresh_store_combo(select=initial_name)
 
         save_row = ttk.Frame(store_frame)
         save_row.pack(fill="x", pady=(8, 0))
-        ttk.Label(save_row, text="Enregistrer le tableau ci-dessous sous le nom :").pack(side="left")
+        ttk.Label(save_row, text=tr("rmd_save_as_label")).pack(side="left")
         self.save_name_var = tk.StringVar(value=initial_name or "")
         ttk.Entry(save_row, textvariable=self.save_name_var, width=20).pack(side="left", padx=5)
-        ttk.Button(save_row, text="Enregistrer en mémoire", command=self._on_save_to_store).pack(side="left", padx=3)
+        ttk.Button(save_row, text=tr("rmd_save_to_memory"), command=self._on_save_to_store).pack(side="left", padx=3)
 
-        table_frame = ttk.LabelFrame(self, text="Tableau numéro / nom / classe", padding=10)
+        table_frame = ttk.LabelFrame(self, text=tr("rmd_table_group"), padding=10)
         table_frame.pack(fill="both", expand=True, padx=10, pady=6)
         header = ttk.Frame(table_frame)
         header.pack(fill="x")
-        ttk.Label(header, text="Numéro", width=8).pack(side="left", padx=2)
-        ttk.Label(header, text="Nom", width=28).pack(side="left", padx=2)
-        ttk.Label(header, text="Classe", width=12).pack(side="left", padx=2)
+        ttk.Label(header, text=tr("col_number"), width=8).pack(side="left", padx=2)
+        ttk.Label(header, text=tr("col_name"), width=28).pack(side="left", padx=2)
+        ttk.Label(header, text=tr("col_class"), width=12).pack(side="left", padx=2)
         self.scroll = ScrollableFrame(table_frame, height=380)
         self.scroll.pack(fill="both", expand=True, pady=(4, 0))
-        ttk.Button(table_frame, text="+ Ajouter une ligne", command=lambda: self._add_row()).pack(
+        ttk.Button(table_frame, text=tr("btn_add_row"), command=lambda: self._add_row()).pack(
             anchor="w", pady=6)
 
         if initial_roster:
@@ -1182,15 +1182,15 @@ class RosterManagerDialog(tk.Toplevel):
 
         action_row = ttk.Frame(self, padding=10)
         action_row.pack(fill="x")
-        ttk.Button(action_row, text="Annuler", command=self.destroy).pack(side="right")
+        ttk.Button(action_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
         if on_apply:
-            ttk.Button(action_row, text="Utiliser ce tableau", command=self._on_use_click).pack(
+            ttk.Button(action_row, text=tr("rmd_use_table"), command=self._on_use_click).pack(
                 side="right", padx=5)
 
         self.transient(master)
         self.grab_set()
 
-    # -- Lignes du tableau -------------------------------------------------
+    # -- Table rows -------------------------------------------------
     def _add_row(self, numero="", nom="", classe=""):
         row_frame = ttk.Frame(self.scroll.inner)
         row_frame.pack(fill="x", pady=1)
@@ -1229,20 +1229,20 @@ class RosterManagerDialog(tk.Toplevel):
             if not nom and not numero_str:
                 continue
             if not numero_str.isdigit():
-                errors.append(f"Numéro invalide pour « {nom or '(sans nom)'} ».")
+                errors.append(tr("rmd_invalid_number_for", name=nom or tr("rmd_no_name")))
                 continue
             num = int(numero_str)
             if num in seen:
-                errors.append(f"Le numéro {num} est utilisé plusieurs fois.")
+                errors.append(tr("rmd_number_used_twice", num=num))
                 continue
             if not nom:
-                errors.append(f"Nom manquant pour le numéro {num}.")
+                errors.append(tr("rmd_name_missing_for", num=num))
                 continue
             seen.add(num)
             roster[num] = {"nom": nom, "classe": classe}
         return roster, errors
 
-    # -- Classes enregistrées -----------------------------------------------
+    # -- Classes saved to memory -----------------------------------------------
     def _refresh_store_combo(self, select=None):
         names = class_store.list_classes()
         self.store_combo.configure(values=names)
@@ -1254,10 +1254,9 @@ class RosterManagerDialog(tk.Toplevel):
     def _on_load_from_store(self):
         name = self.store_combo.get()
         if not name:
-            messagebox.showinfo(APP_TITLE, "Choisis d'abord une classe dans la liste.")
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        if self.rows and not messagebox.askyesno(
-                APP_TITLE, "Le tableau actuel sera remplacé par la classe chargée. Continuer ?"):
+        if self.rows and not messagebox.askyesno(APP_TITLE, tr("rmd_confirm_replace_table")):
             return
         roster = class_store.load_class(name)
         self._load_roster_into_table(roster)
@@ -1266,9 +1265,9 @@ class RosterManagerDialog(tk.Toplevel):
     def _on_rename_in_store(self):
         name = self.store_combo.get()
         if not name:
-            messagebox.showinfo(APP_TITLE, "Choisis d'abord une classe dans la liste.")
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        new_name = simpledialog.askstring(APP_TITLE, f"Nouveau nom pour « {name} » :", initialvalue=name,
+        new_name = simpledialog.askstring(APP_TITLE, tr("rmd_new_name_for", name=name), initialvalue=name,
                                            parent=self)
         if not new_name or new_name.strip() == name:
             return
@@ -1280,47 +1279,46 @@ class RosterManagerDialog(tk.Toplevel):
     def _on_delete_from_store(self):
         name = self.store_combo.get()
         if not name:
-            messagebox.showinfo(APP_TITLE, "Choisis d'abord une classe dans la liste.")
+            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        if messagebox.askyesno(APP_TITLE, f"Supprimer définitivement la classe « {name} » de la mémoire ?\n"
-                                           "(le tableau affiché ici n'est pas effacé)"):
+        if messagebox.askyesno(APP_TITLE, tr("rmd_confirm_delete_class", name=name)):
             class_store.delete_class(name)
             self._refresh_store_combo()
 
     def _on_save_to_store(self):
         roster, errors = self._extract_roster()
         if errors:
-            messagebox.showerror(APP_TITLE, "Corrige d'abord :\n\n" + "\n".join(errors))
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
             return
         if not roster:
-            messagebox.showwarning(APP_TITLE, "Le tableau est vide.")
+            messagebox.showwarning(APP_TITLE, tr("rmd_table_empty"))
             return
         name = self.save_name_var.get().strip()
         if not name:
-            messagebox.showwarning(APP_TITLE, "Donne un nom à cette classe avant de l'enregistrer.")
+            messagebox.showwarning(APP_TITLE, tr("rmd_name_required"))
             return
         if name in class_store.list_classes():
-            if not messagebox.askyesno(APP_TITLE, f"Une classe « {name} » existe déjà en mémoire. La remplacer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
         class_store.save_class(name, roster)
         self._refresh_store_combo(select=name)
-        messagebox.showinfo(APP_TITLE, f"Classe « {name} » enregistrée en mémoire ({len(roster)} élève(s)).")
+        messagebox.showinfo(APP_TITLE, tr("rmd_class_saved", name=name, n=len(roster)))
 
-    # -- Application dans l'onglet appelant -----------------------------
+    # -- Applying to the calling tab -----------------------------
     def _on_use_click(self):
         roster, errors = self._extract_roster()
         if errors:
-            messagebox.showerror(APP_TITLE, "Corrige d'abord :\n\n" + "\n".join(errors))
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
             return
         if not roster:
-            messagebox.showwarning(APP_TITLE, "Le tableau est vide.")
+            messagebox.showwarning(APP_TITLE, tr("rmd_table_empty"))
             return
         self.on_apply(roster, self.save_name_var.get().strip() or None)
         self.destroy()
 
 
 # ---------------------------------------------------------------------
-# Onglet 2 : scan et correction
+# Tab 2: scanning and grading
 # ---------------------------------------------------------------------
 class ScanTab(ttk.Frame):
     def __init__(self, master):
@@ -1338,62 +1336,64 @@ class ScanTab(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x")
 
-        csv_frame = ttk.LabelFrame(top, text="1. Liste de la classe (CSV)", padding=10)
+        csv_frame = ttk.LabelFrame(top, text=tr("scan_csv_group"), padding=10)
         csv_frame.pack(fill="x", pady=(0, 8))
         self.csv_path_var = tk.StringVar(value=s.get("scan_csv_path", ""))
         row = ttk.Frame(csv_frame)
         row.pack(fill="x")
         ttk.Entry(row, textvariable=self.csv_path_var, width=50).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Parcourir…", command=self._browse_csv).pack(side="left", padx=5)
-        ttk.Button(row, text="Créer un modèle…", command=lambda: offer_csv_template(self)).pack(
+        ttk.Button(row, text=tr("btn_browse"), command=self._browse_csv).pack(side="left", padx=5)
+        ttk.Button(row, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
             side="left", padx=5)
         row1b = ttk.Frame(csv_frame)
         row1b.pack(fill="x", pady=(4, 0))
-        ttk.Button(row1b, text="Tableau élèves (voir/modifier/mémoire)…",
+        ttk.Button(row1b, text=tr("gen_roster_table_btn"),
                    command=self._open_roster_manager).pack(side="left")
-        ttk.Button(row1b, text="Enregistrer cette classe en mémoire",
+        ttk.Button(row1b, text=tr("gen_save_class_btn"),
                    command=self._save_class_to_memory).pack(side="left", padx=5)
         self.csv_info_label = ttk.Label(csv_frame, text="", foreground="#555555")
         self.csv_info_label.pack(anchor="w", pady=(4, 0))
         if self.csv_path_var.get() and os.path.exists(self.csv_path_var.get()):
             self._load_csv(self.csv_path_var.get())
 
-        photos_frame = ttk.LabelFrame(top, text="2. Photos des copies", padding=10)
+        photos_frame = ttk.LabelFrame(top, text=tr("scan_photos_group"), padding=10)
         photos_frame.pack(fill="x", pady=(0, 8))
         btn_row = ttk.Frame(photos_frame)
         btn_row.pack(fill="x")
-        ttk.Button(btn_row, text="Ajouter des photos…", command=self._add_photos).pack(side="left")
-        ttk.Button(btn_row, text="Ajouter un dossier…", command=self._add_folder).pack(side="left", padx=5)
-        ttk.Button(btn_row, text="Ajouter un PDF (copies scannées)…", command=self._add_pdf).pack(
+        ttk.Button(btn_row, text=tr("scan_add_photos"), command=self._add_photos).pack(side="left")
+        ttk.Button(btn_row, text=tr("scan_add_folder"), command=self._add_folder).pack(side="left", padx=5)
+        ttk.Button(btn_row, text=tr("scan_add_pdf"), command=self._add_pdf).pack(
             side="left", padx=5)
-        ttk.Button(btn_row, text="Retirer la sélection", command=self._remove_selected_photos).pack(side="left", padx=5)
-        ttk.Button(btn_row, text="Vider la liste", command=self._clear_photos).pack(side="left", padx=5)
+        ttk.Button(btn_row, text=tr("scan_remove_selection"), command=self._remove_selected_photos).pack(
+            side="left", padx=5)
+        ttk.Button(btn_row, text=tr("scan_clear_list"), command=self._clear_photos).pack(side="left", padx=5)
         self.photos_list = tk.Listbox(photos_frame, height=6, selectmode="extended")
         self.photos_list.pack(fill="x", pady=6)
 
         key_row = ttk.Frame(photos_frame)
         key_row.pack(fill="x")
-        ttk.Button(key_row, text="Définir le corrigé (facultatif)…", command=self._open_answer_key).pack(side="left")
-        self.answer_key_label = ttk.Label(key_row, text="Corrigé : non défini (pas de notation)",
+        ttk.Button(key_row, text=tr("scan_define_key"), command=self._open_answer_key).pack(side="left")
+        self.answer_key_label = ttk.Label(key_row, text=tr("scan_key_undefined"),
                                            foreground="#555555")
         self.answer_key_label.pack(side="left", padx=10)
 
-        out_frame = ttk.LabelFrame(top, text="3. Dossier de résultats", padding=10)
+        out_frame = ttk.LabelFrame(top, text=tr("scan_output_group"), padding=10)
         out_frame.pack(fill="x", pady=(0, 8))
         self.output_dir_var = tk.StringVar(
-            value=s.get("scan_output_dir", os.path.join(app_config.default_documents_dir(), "Corrections")))
+            value=s.get("scan_output_dir",
+                         os.path.join(app_config.default_documents_dir(), tr("scan_output_dir_default"))))
         row3 = ttk.Frame(out_frame)
         row3.pack(fill="x")
         ttk.Entry(row3, textvariable=self.output_dir_var, width=50).pack(side="left", fill="x", expand=True)
-        ttk.Button(row3, text="Parcourir…", command=self._browse_output_dir).pack(side="left", padx=5)
+        ttk.Button(row3, text=tr("btn_browse"), command=self._browse_output_dir).pack(side="left", padx=5)
 
         action_row = ttk.Frame(self)
         action_row.pack(fill="x", pady=6)
-        self.run_btn = ttk.Button(action_row, text="Lancer la correction", command=self._on_run)
+        self.run_btn = ttk.Button(action_row, text=tr("scan_btn_run"), command=self._on_run)
         self.run_btn.pack(side="left")
         self.progress = ttk.Progressbar(action_row, mode="indeterminate", length=200)
         self.progress.pack(side="left", padx=10)
-        self.show_results_btn = ttk.Button(action_row, text="Voir les résultats…",
+        self.show_results_btn = ttk.Button(action_row, text=tr("scan_btn_show_results"),
                                             command=self._ensure_results_window, state="disabled")
         self.show_results_btn.pack(side="left", padx=5)
 
@@ -1401,19 +1401,18 @@ class ScanTab(ttk.Frame):
         self.status_label.pack(fill="x", pady=(4, 0))
 
     def _ensure_results_window(self):
-        """Les résultats (résumé + tableau) s'affichent dans une fenêtre
-        séparée plutôt qu'en bas de cet onglet : sur un lot de plusieurs
-        dizaines de copies, le tableau ne tenait pas dans la fenêtre
-        principale et passait hors champ. Fermer cette fenêtre la cache
-        seulement (elle garde son contenu) ; 'Voir les résultats…' la
-        rouvre."""
+        """Results (summary + table) are shown in a separate window
+        rather than at the bottom of this tab: on a batch of several
+        dozen copies, the table didn't fit in the main window and went
+        out of view. Closing this window only hides it (it keeps its
+        content); 'View results…' reopens it."""
         if self.results_win is not None and self.results_win.winfo_exists():
             self.results_win.deiconify()
             self.results_win.lift()
             return
 
         win = tk.Toplevel(self)
-        win.title("Résultats de la correction")
+        win.title(tr("res_title"))
         screen_w = win.winfo_screenwidth()
         screen_h = win.winfo_screenheight()
         win.geometry(f"{min(1000, int(screen_w * 0.8))}x{min(720, int(screen_h * 0.8))}")
@@ -1422,9 +1421,9 @@ class ScanTab(ttk.Frame):
 
         btn_row = ttk.Frame(win, padding=10)
         btn_row.pack(fill="x")
-        self.export_btn = ttk.Button(btn_row, text="Exporter les résultats (CSV)", command=self._on_export)
+        self.export_btn = ttk.Button(btn_row, text=tr("res_export_btn"), command=self._on_export)
         self.export_btn.pack(side="left")
-        self.update_csv_btn = ttk.Button(btn_row, text="Mettre à jour le CSV classe", command=self._on_update_csv)
+        self.update_csv_btn = ttk.Button(btn_row, text=tr("res_update_csv_btn"), command=self._on_update_csv)
         self.update_csv_btn.pack(side="left", padx=5)
 
         self.summary_label = ttk.Label(win, text="", foreground="#333333", wraplength=960, justify="left",
@@ -1433,8 +1432,9 @@ class ScanTab(ttk.Frame):
 
         columns = ("numero", "eleve", "classe", "statut", "note")
         self.tree = ttk.Treeview(win, columns=columns, show="headings", height=20)
-        for col, label, width in [("numero", "N°", 50), ("eleve", "Élève", 180), ("classe", "Classe", 80),
-                                   ("statut", "Statut", 130), ("note", "Note", 90)]:
+        for col, label, width in [("numero", tr("col_number"), 50), ("eleve", tr("col_name"), 180),
+                                   ("classe", tr("col_class"), 80), ("statut", tr("col_status"), 130),
+                                   ("note", tr("col_note"), 90)]:
             self.tree.heading(col, text=label)
             self.tree.column(col, width=width, anchor="w")
         self.tree.pack(fill="both", expand=True, padx=10, pady=8)
@@ -1444,15 +1444,15 @@ class ScanTab(ttk.Frame):
         self.tree.tag_configure("unknown", background="#fddede")
         self.tree.tag_configure("missing", background="#e4e9f7")
         self.tree.tag_configure("error", background="#f6c6c6")
-        ttk.Label(win, text="Double-clique sur une ligne pour voir/corriger le détail d'une copie.",
+        ttk.Label(win, text=tr("res_double_click_hint"),
                   foreground="#555555").pack(anchor="w", padx=10, pady=(0, 10))
 
         self._populate_tree()
 
     # -- CSV --------------------------------------------------------
     def _browse_csv(self):
-        path = filedialog.askopenfilename(title="Choisir le fichier CSV de la classe",
-                                           filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")])
+        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
+                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
         if path:
             self._load_csv(path)
 
@@ -1460,19 +1460,19 @@ class ScanTab(ttk.Frame):
         try:
             roster, use_path, message = smart_load_roster_with_export(path)
         except (OSError, KeyError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Impossible de lire ce fichier CSV.\n\nDétail : {exc}")
+            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
             return
         if message:
             messagebox.showinfo(APP_TITLE, message)
         self.csv_path_var.set(use_path)
         self.roster = roster
-        self.csv_info_label.config(text=f"{len(roster)} élève(s) chargé(s).")
+        self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(roster)))
 
     def _open_roster_manager(self):
         def on_apply(roster, name):
             self.roster = roster
-            self.csv_path_var.set(f"(classe en mémoire : {name})" if name else "(tableau modifié manuellement)")
-            self.csv_info_label.config(text=f"{len(roster)} élève(s) chargé(s).")
+            self.csv_path_var.set(tr("csv_path_from_memory", name=name) if name else tr("csv_path_manual_edit"))
+            self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(roster)))
 
         RosterManagerDialog(self, initial_roster=self.roster,
                              initial_name=suggest_class_name(self.roster) if self.roster else None,
@@ -1481,31 +1481,30 @@ class ScanTab(ttk.Frame):
     def _save_class_to_memory(self):
         roster = self.roster
         if not roster:
-            messagebox.showwarning(APP_TITLE, "Charge d'abord une liste d'élèves (CSV) avant de l'enregistrer "
-                                                "en mémoire.")
+            messagebox.showwarning(APP_TITLE, tr("gen_roster_load_warn"))
             return
         suggested = suggest_class_name(roster)
-        name = simpledialog.askstring(APP_TITLE, "Nom de la classe à enregistrer en mémoire :",
+        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"),
                                        initialvalue=suggested, parent=self)
         if not name or not name.strip():
             return
         name = name.strip()
         if name in class_store.list_classes():
-            if not messagebox.askyesno(APP_TITLE, f"Une classe « {name} » existe déjà en mémoire. La remplacer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
                 return
         class_store.save_class(name, roster)
-        messagebox.showinfo(APP_TITLE, f"Classe « {name} » enregistrée en mémoire ({len(roster)} élève(s)).")
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
 
     # -- Photos -------------------------------------------------------
     def _add_photos(self):
         paths = filedialog.askopenfilenames(
-            title="Choisir les photos des copies",
-            filetypes=[("Images", " ".join(f"*{ext}" for ext in IMAGE_EXTS)), ("Tous les fichiers", "*.*")])
+            title=tr("scan_choose_photos"),
+            filetypes=[(tr("file_images"), " ".join(f"*{ext}" for ext in IMAGE_EXTS)), (tr("file_all"), "*.*")])
         for p in paths:
             self.photos_list.insert("end", p)
 
     def _add_folder(self):
-        d = filedialog.askdirectory(title="Choisir un dossier de photos")
+        d = filedialog.askdirectory(title=tr("scan_choose_photo_folder"))
         if not d:
             return
         found = []
@@ -1516,12 +1515,12 @@ class ScanTab(ttk.Frame):
             self.photos_list.insert("end", p)
 
     def _add_pdf(self):
-        path = filedialog.askopenfilename(title="Choisir le PDF des copies scannées",
-                                           filetypes=[("Fichier PDF", "*.pdf"), ("Tous les fichiers", "*.*")])
+        path = filedialog.askopenfilename(title=tr("scan_choose_pdf"),
+                                           filetypes=[(tr("file_pdf"), "*.pdf"), (tr("file_all"), "*.*")])
         if not path:
             return
         self.progress.start(12)
-        self.status_label.config(text=f"Extraction des pages de « {os.path.basename(path)} »…")
+        self.status_label.config(text=tr("scan_extracting_pdf", name=os.path.basename(path)))
 
         def work():
             import fitz
@@ -1529,7 +1528,7 @@ class ScanTab(ttk.Frame):
             try:
                 n_pages = doc.page_count
                 if n_pages == 0:
-                    raise ValueError("Ce PDF ne contient aucune page.")
+                    raise ValueError(tr("scan_pdf_no_pages"))
                 out_dir = tempfile.mkdtemp(prefix="qcm_pdf_")
                 mat = fitz.Matrix(300 / 72, 300 / 72)
                 page_paths = []
@@ -1547,12 +1546,11 @@ class ScanTab(ttk.Frame):
             self.status_label.config(text="")
             if err:
                 exc, tb = err
-                messagebox.showerror(APP_TITLE, f"Impossible de lire ce PDF :\n\n{exc}")
+                messagebox.showerror(APP_TITLE, tr("scan_pdf_read_error", detail=exc))
                 return
             for p in result:
                 self.photos_list.insert("end", p)
-            messagebox.showinfo(APP_TITLE, f"{len(result)} page(s) extraite(s) de « {os.path.basename(path)} » "
-                                            "et ajoutée(s) à la liste des photos.")
+            messagebox.showinfo(APP_TITLE, tr("scan_pdf_extracted", n=len(result), name=os.path.basename(path)))
 
         run_in_background(self, work, on_done)
 
@@ -1563,7 +1561,7 @@ class ScanTab(ttk.Frame):
     def _clear_photos(self):
         self.photos_list.delete(0, "end")
 
-    # -- Corrigé --------------------------------------------------------
+    # -- Answer key --------------------------------------------------------
     def _open_answer_key(self):
         s = self.settings
         n_q = s.get("n_questions", 12)
@@ -1576,37 +1574,36 @@ class ScanTab(ttk.Frame):
             s["n_choices"] = int(dialog.n_choices_var.get())
             app_config.save_settings(s)
             if self.answer_key:
-                self.answer_key_label.config(text=f"Corrigé : défini ({len(self.answer_key)} question(s) notée(s))")
+                self.answer_key_label.config(text=tr("scan_key_defined", n=len(self.answer_key)))
             else:
-                self.answer_key_label.config(text="Corrigé : non défini (pas de notation)")
+                self.answer_key_label.config(text=tr("scan_key_undefined"))
 
-    # -- Dossier de sortie ---------------------------------------------
+    # -- Output folder ---------------------------------------------
     def _browse_output_dir(self):
-        d = filedialog.askdirectory(title="Choisir le dossier de résultats")
+        d = filedialog.askdirectory(title=tr("scan_choose_results_dir"))
         if d:
             self.output_dir_var.set(d)
 
-    # -- Lancer la correction -------------------------------------------
+    # -- Run grading -------------------------------------------
     def _on_run(self):
         photo_paths = list(self.photos_list.get(0, "end"))
         if not photo_paths:
-            messagebox.showwarning(APP_TITLE, "Ajoute au moins une photo de copie avant de lancer la correction.")
+            messagebox.showwarning(APP_TITLE, tr("scan_need_photo"))
             return
         if not self.roster:
-            if not messagebox.askyesno(APP_TITLE, "Aucun fichier CSV classe chargé : tous les numéros seront "
-                                                    "signalés comme inconnus. Continuer ?"):
+            if not messagebox.askyesno(APP_TITLE, tr("scan_no_csv_confirm")):
                 return
         output_dir = self.output_dir_var.get().strip()
         try:
             os.makedirs(output_dir, exist_ok=True)
         except OSError as exc:
-            messagebox.showerror(APP_TITLE, f"Impossible d'utiliser ce dossier de résultats : {exc}")
+            messagebox.showerror(APP_TITLE, tr("scan_output_dir_error", detail=exc))
             return
 
         self.run_btn.config(state="disabled")
         self.progress.start(12)
         self._ensure_results_window()
-        self.summary_label.config(text=f"Lecture de {len(photo_paths)} photo(s) en cours…")
+        self.summary_label.config(text=tr("scan_reading_photos", n=len(photo_paths)))
 
         def work():
             run_dir = os.path.join(output_dir, "correction_" + time.strftime("%Y%m%d_%H%M%S"))
@@ -1620,7 +1617,7 @@ class ScanTab(ttk.Frame):
             self.run_btn.config(state="normal")
             if err:
                 exc, tb = err
-                messagebox.showerror(APP_TITLE, f"Échec de la correction :\n\n{exc}")
+                messagebox.showerror(APP_TITLE, tr("scan_failed", detail=exc))
                 self.summary_label.config(text="")
                 return
             report, run_dir = result
@@ -1654,7 +1651,7 @@ class ScanTab(ttk.Frame):
                 if entry.get("incertaines"):
                     note_str += f" (⚠ {len(entry['incertaines'])})"
             self.tree.insert("", "end", iid=str(idx),
-                              values=(numero, eleve, classe, STATUS_LABELS.get(status, status), note_str),
+                              values=(numero, eleve, classe, status_label(status), note_str),
                               tags=(tag_map.get(status, "error"),))
 
     def _on_row_double_click(self, event):
@@ -1684,9 +1681,9 @@ class ScanTab(ttk.Frame):
             return
         default_dir = getattr(self, "last_run_dir", self.output_dir_var.get())
         path = filedialog.asksaveasfilename(
-            title="Exporter les résultats", initialdir=default_dir,
+            title=tr("res_export_title"), initialdir=default_dir,
             initialfile=f"resultats_{time.strftime('%Y%m%d_%H%M%S')}.csv",
-            defaultextension=".csv", filetypes=[("Fichier CSV", "*.csv")])
+            defaultextension=".csv", filetypes=[(tr("file_csv"), "*.csv")])
         if not path:
             return
         max_q = 0
@@ -1703,7 +1700,7 @@ class ScanTab(ttk.Frame):
             w.writerow(headers)
             for e in self.report:
                 row = [e.get("sheet_number", ""), e.get("eleve", ""), e.get("classe", ""),
-                       STATUS_LABELS.get(e.get("status"), e.get("status"))]
+                       status_label(e.get("status"))]
                 if has_notes:
                     note = e.get("note")
                     row.append(f"{note:.2f}" if note is not None else "")
@@ -1713,18 +1710,18 @@ class ScanTab(ttk.Frame):
                     qres = questions.get(q)
                     row.append(";".join(qres["answers"]) if qres else "")
                 w.writerow(row)
-        if messagebox.askyesno(APP_TITLE, f"Résultats exportés :\n{path}\n\nOuvrir le fichier ?"):
+        if messagebox.askyesno(APP_TITLE, tr("res_exported", path=path)):
             os.startfile(path)
 
     def _on_update_csv(self):
         path = self.csv_path_var.get()
-        # csv_path_var affiche parfois un texte informatif plutôt qu'un
-        # vrai chemin (ex. "(classe en mémoire : 6A)" après un chargement
-        # depuis la mémoire) : ne jamais l'utiliser tel quel comme fichier
-        # à écrire, toujours demander un emplacement dans ce cas.
+        # csv_path_var sometimes shows an informational text rather than
+        # a real path (e.g. "(class from memory: 6A)" after loading from
+        # memory): never use it as-is as a file to write, always ask for
+        # a location in that case.
         if not path or not path.lower().endswith(".csv"):
-            path = filedialog.asksaveasfilename(title="Enregistrer le CSV classe", defaultextension=".csv",
-                                                 filetypes=[("Fichier CSV", "*.csv")])
+            path = filedialog.asksaveasfilename(title=tr("res_update_csv_title"), defaultextension=".csv",
+                                                 filetypes=[(tr("file_csv"), "*.csv")])
             if not path:
                 return
         merged = dict(self.roster)
@@ -1738,17 +1735,56 @@ class ScanTab(ttk.Frame):
                 for num in sorted(merged.keys()):
                     w.writerow([num, merged[num]["nom"], merged[num].get("classe", "")])
         except OSError as exc:
-            messagebox.showerror(APP_TITLE, f"Impossible d'enregistrer le CSV : {exc}")
+            messagebox.showerror(APP_TITLE, tr("res_csv_save_error", detail=exc))
             return
         self.roster = merged
         self.csv_path_var.set(path)
-        self.csv_info_label.config(text=f"{len(merged)} élève(s) chargé(s).")
-        messagebox.showinfo(APP_TITLE, f"CSV classe mis à jour : {path}")
+        self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(merged)))
+        messagebox.showinfo(APP_TITLE, tr("res_csv_updated", path=path))
+
+
+# ---------------------------------------------------------------------
+# Tab 3: preferences (language)
+# ---------------------------------------------------------------------
+class PreferencesTab(ttk.Frame):
+    def __init__(self, master, on_language_change):
+        super().__init__(master, padding=12)
+        self.on_language_change = on_language_change
+
+        lang_frame = ttk.LabelFrame(self, text=tr("prefs_group"), padding=10)
+        lang_frame.pack(fill="x", pady=(0, 10))
+        row = ttk.Frame(lang_frame)
+        row.pack(fill="x")
+        ttk.Label(row, text=tr("prefs_language_label")).pack(side="left")
+        self._label_to_code = {label: code for code, label in translations.LANGUAGES.items()}
+        current_label = translations.LANGUAGES[translations.get_language()]
+        self.lang_var = tk.StringVar(value=current_label)
+        combo = ttk.Combobox(row, textvariable=self.lang_var, values=list(translations.LANGUAGES.values()),
+                              state="readonly", width=20)
+        combo.pack(side="left", padx=5)
+        combo.bind("<<ComboboxSelected>>", self._on_language_selected)
+        ttk.Label(lang_frame, text=tr("prefs_hint"), foreground="#555555",
+                  wraplength=620, justify="left").pack(anchor="w", pady=(6, 0))
+
+        about_frame = ttk.LabelFrame(self, text=tr("prefs_about_group"), padding=10)
+        about_frame.pack(fill="x")
+        ttk.Label(about_frame, text=tr("prefs_about_text"), justify="left",
+                  wraplength=620, foreground="#555555").pack(anchor="w")
+
+    def _on_language_selected(self, event):
+        code = self._label_to_code.get(self.lang_var.get())
+        if not code or code == translations.get_language():
+            return
+        translations.set_language(code)
+        s = app_config.load_settings()
+        s["language"] = code
+        app_config.save_settings(s)
+        self.on_language_change()
 
 
 def main():
+    translations.load_language_from_settings()
     root = tk.Tk()
-    root.title(APP_TITLE)
     root.geometry("880x820")
 
     try:
@@ -1760,15 +1796,25 @@ def main():
 
     header = ttk.Frame(root, padding=(12, 10, 12, 0))
     header.pack(fill="x")
-    ttk.Label(header, text="QCM Scanner", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-    ttk.Label(header, text="Génération des feuilles-réponses et correction automatique des copies scannées.",
-              foreground="#555555").pack(anchor="w")
+    title_label = ttk.Label(header, font=("Segoe UI", 14, "bold"))
+    title_label.pack(anchor="w")
+    subtitle_label = ttk.Label(header, foreground="#555555")
+    subtitle_label.pack(anchor="w")
 
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True, padx=12, pady=10)
-    notebook.add(GenerateTab(notebook), text="Générer les feuilles")
-    notebook.add(ScanTab(notebook), text="Scanner / Corriger")
 
+    def rebuild_ui():
+        root.title(tr("app_title"))
+        title_label.config(text=tr("app_title"))
+        subtitle_label.config(text=tr("app_subtitle"))
+        for child in notebook.winfo_children():
+            child.destroy()
+        notebook.add(GenerateTab(notebook), text=tr("tab_generate"))
+        notebook.add(ScanTab(notebook), text=tr("tab_scan"))
+        notebook.add(PreferencesTab(notebook, on_language_change=rebuild_ui), text=tr("tab_preferences"))
+
+    rebuild_ui()
     root.mainloop()
 
 

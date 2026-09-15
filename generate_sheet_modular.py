@@ -1,26 +1,28 @@
 """
-Générateur modulaire de feuilles-réponses.
+Modular answer-sheet generator.
 
-Reprend le design v2 (5 colonnes, ronds vides, en-têtes répétées, motif
-numéroté) mais rend TOUT paramétrable :
-- titre / sous-titre
-- présence du champ "Classe :"
-- nombre de questions (la mise en page se recalcule automatiquement)
-- nombre de colonnes de réponses (2 à 5)
-- échelle de la feuille (homothétie du design de base, natif = A6)
-- nombre de feuilles par page imprimée (pavage rows x cols)
-- format de la page de sortie (A4 par défaut)
+Reuses the v2 design (5 columns, empty circles, repeated headers,
+numbered pattern) but makes EVERYTHING configurable:
+- title / subtitle
+- presence of the "Classe :" ("Class:") field
+- number of questions (the layout recomputes itself automatically)
+- number of answer columns (2 to 5)
+- sheet scale (homothety of the base design, native = A6)
+- number of sheets per printed page (rows x cols tiling)
+- output page format (A4 by default)
 
-Le design "natif" (échelle 1) reste exactement le format A6 déjà validé
-(105 x 148.5 mm, bulles de 4.2mm). Toute autre échelle est une
-homothétie pure de ce design : mêmes proportions, mêmes repères de
-calage, juste plus grand ou plus petit.
-"""
+The "native" design (scale 1) is exactly the already-validated A6
+format (105 x 148.5 mm, 4.2mm bubbles). Any other scale is a pure
+homothety of this design: same proportions, same alignment markers,
+just bigger or smaller. Sheet-printed text (labels drawn on the answer
+sheet itself, e.g. "Nom :"/"Classe :"/"Exemple :") is intentionally
+left in French: it's the printed document's content, not the
+software's interface (see translations.py for the interface)."""
 from dataclasses import dataclass, replace as dataclass_replace
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm as MM
 
-# --- Dimensions natives (échelle 1), reprises du design A6 validé ---
+# --- Native dimensions (scale 1), from the validated A6 design ---
 NATIVE_W = 105.0
 NATIVE_H = 148.5
 
@@ -33,46 +35,46 @@ BUBBLE_GAP = 11.0
 COL_Q_LABEL_W = 8.0
 GRID_LEFT_LOCAL = 8.0
 ROW_X_SHIFT = 10.0
-ROW_H = 6.6                # hauteur de ligne native (12 questions, échelle 1)
-BUBBLE_RATIO = BUBBLE_D / ROW_H   # rapport bulle/ligne, conservé à toute échelle
+ROW_H = 6.6                # native row height (12 questions, scale 1)
+BUBBLE_RATIO = BUBBLE_D / ROW_H   # bubble/row ratio, kept at every scale
 
 N_ID_BITS = 8
 ID_BORDER = 1.0
 ID_GAP = 0.5
 ID_COLS, ID_ROWS = 4, 2
 
-MIN_BUBBLE_MM = 3.15   # taille minimale imprimée d'une bulle pour une détection fiable
-# (calé pour que 64 questions tiennent tout juste en recto-verso sur une A4 : 32+32
-# donne des bulles à 3.186mm, un chouïa sous l'ancien seuil rond de 3.2mm)
+MIN_BUBBLE_MM = 3.15   # minimum printed bubble size for reliable detection
+# (tuned so that 64 questions just fit double-sided on an A4 sheet: 32+32
+# gives 3.186mm bubbles, a hair under the old round 3.2mm threshold)
 
-CHOICES_MAX = ["A", "B", "C", "D", "E", "F"]  # jusqu'à 6 colonnes de réponses
+CHOICES_MAX = ["A", "B", "C", "D", "E", "F"]  # up to 6 answer columns
 
-# --- Code-barres de configuration (bas de la feuille) ---
-# Encode n_questions, n_choices, l'échelle et show_classe directement sur
-# la feuille : le script de lecture n'a plus besoin qu'on lui précise la
-# configuration à la main, il la lit toute seule.
-BARCODE_N_BITS = 15   # 6 (n_questions total, 1-64) + 2 (n_choices) + 4 (échelle) + 1 (classe) + 1 (face) + 1 (parité)
+# --- Configuration barcode (bottom of the sheet) ---
+# Encodes n_questions, n_choices, scale and show_classe directly on the
+# sheet: the reading script no longer needs to be told the configuration
+# by hand, it reads it on its own.
+BARCODE_N_BITS = 15   # 6 (total n_questions, 1-64) + 2 (n_choices) + 4 (scale) + 1 (classe) + 1 (side) + 1 (parity)
 BARCODE_BAR_W = 1.5
 BARCODE_BAR_GAP = 0.5
 BARCODE_BAR_H = 4.0
-BARCODE_Y_CENTER = 10.0   # mm, dans la bande verticale des repères du bas
+BARCODE_Y_CENTER = 10.0   # mm, within the vertical band of the bottom markers
 
 SQRT2 = 2 ** 0.5
 
-MAX_QUESTIONS = 64  # au-delà, aucun intérêt pratique -> tient sur 6 bits (1-64)
-MAX_SCALE = 2.0      # taille maximale de la feuille-réponse : A4 (= A6 x2)
+MAX_QUESTIONS = 64  # beyond that, no practical use -> fits on 6 bits (1-64)
+MAX_SCALE = 2.0      # maximum answer-sheet size: A4 (= A6 x2)
 
 
 def needs_recto_verso(cfg):
-    """True si le nombre de questions ne tient pas sur une seule face à
-    l'échelle demandée (dans la limite MAX_SCALE = A4)."""
+    """True if the number of questions doesn't fit on a single side at
+    the requested scale (within the MAX_SCALE = A4 limit)."""
     return cfg.n_questions > max_questions_for_scale(min(cfg.scale, MAX_SCALE))
 
 
 def side_question_range(cfg, side):
-    """(numéro de la 1re question, nombre de questions) pour la face
-    'side' (0 = recto, 1 = verso) de cfg. Si le recto-verso n'est pas
-    nécessaire, side=0 retourne tout, side=1 est vide (0 question)."""
+    """(1st question's number, number of questions) for side 'side'
+    (0 = front, 1 = back) of cfg. If double-sided isn't needed, side=0
+    returns everything, side=1 is empty (0 questions)."""
     total = cfg.n_questions
     if not needs_recto_verso(cfg):
         return (1, total) if side == 0 else (total + 1, 0)
@@ -82,14 +84,14 @@ def side_question_range(cfg, side):
 
 
 def encode_config(cfg, side=0):
-    """cfg -> un entier de 15 bits.
+    """cfg -> a 15-bit integer.
     [n_questions_total-1 (6b)][n_choices-3 (2b)][scale_level (4b)]
-    [show_classe (1b)][side: 0=recto/1=verso (1b)][parité (1b)]."""
+    [show_classe (1b)][side: 0=front/1=back (1b)][parity (1b)]."""
     if not (1 <= cfg.n_questions <= MAX_QUESTIONS):
         raise ValueError(f"n_questions doit \u00eatre entre 1 et {MAX_QUESTIONS} pour le code-barres.")
     n_q_code = cfg.n_questions - 1              # 0-63 (6 bits)
-    n_choices_code = cfg.n_choices - 3          # 0-3 (pour 3 à 6 réponses)
-    scale_level = round(math_log2(cfg.scale) * 2) + 8  # pas de sqrt(2), offset 8
+    n_choices_code = cfg.n_choices - 3          # 0-3 (for 3 to 6 answers)
+    scale_level = round(math_log2(cfg.scale) * 2) + 8  # sqrt(2) step, offset 8
     scale_level = max(0, min(15, scale_level))
     show_classe_bit = 1 if cfg.show_classe else 0
     side_bit = 1 if side else 0
@@ -100,9 +102,9 @@ def encode_config(cfg, side=0):
 
 
 def decode_config_value(value):
-    """entier de 15 bits -> (dict de paramètres + 'side', parité_ok: bool).
-    'n_questions' dans le dict est le TOTAL (les 2 faces additionnées si
-    recto-verso) ; 'side' indique quelle face a été lue (0=recto, 1=verso)."""
+    """15-bit integer -> (parameter dict + 'side', parity_ok: bool).
+    'n_questions' in the dict is the TOTAL (both sides added together if
+    double-sided); 'side' tells which side was read (0=front, 1=back)."""
     parity_bit = value & 1
     body = value >> 1
     expected_parity = bin(body).count("1") % 2
@@ -129,9 +131,9 @@ def math_log2(x):
 
 
 def config_barcode_bit_positions():
-    """14 positions (x_mm, y_mm) natives des barres du code-barres,
-    indépendantes de cfg (position FIXE, lisible avant même de connaître
-    la configuration de la feuille)."""
+    """14 native (x_mm, y_mm) positions of the barcode's bars,
+    independent of cfg (FIXED position, readable even before knowing
+    the sheet's configuration)."""
     total_w = BARCODE_N_BITS * BARCODE_BAR_W + (BARCODE_N_BITS - 1) * BARCODE_BAR_GAP
     x0 = (NATIVE_W - total_w) / 2
     positions = []
@@ -146,12 +148,12 @@ class SheetConfig:
     title: str = "Feuille-réponse"
     subtitle: str = "QCM Physique-Chimie \u2013 M. GIRARD"
     n_questions: int = 12
-    n_choices: int = 5          # nombre de colonnes de réponses (3 à 6)
+    n_choices: int = 5          # number of answer columns (3 to 6)
     show_classe: bool = True
-    scale: float = 1.0          # homothétie : 1.0 = format A6 natif
+    scale: float = 1.0          # homothety: 1.0 = native A6 format
     tiles_rows: int = 2
     tiles_cols: int = 2
-    page_w: float = 210.0       # page de sortie (mm) ; A4 par défaut
+    page_w: float = 210.0       # output page (mm); A4 by default
     page_h: float = 297.0
 
     @property
@@ -167,16 +169,15 @@ class SheetConfig:
         return NATIVE_H * self.scale
 
     def resolve_page_size(self):
-        """Retourne (page_w, page_h) à utiliser réellement : tels quels
-        si le pavage tient dans cette orientation, sinon la page tournée
-        à 90° si ça tient dans l'autre sens. Lève une erreur si aucune
-        des deux orientations ne convient."""
+        """Returns (page_w, page_h) to actually use: as-is if the tiling
+        fits in this orientation, otherwise the page rotated 90° if it
+        fits that way. Raises an error if neither orientation works."""
         fit_w = self.tiles_cols * self.sheet_w
         fit_h = self.tiles_rows * self.sheet_h
         if fit_w <= self.page_w + 0.5 and fit_h <= self.page_h + 0.5:
             return self.page_w, self.page_h
         if fit_w <= self.page_h + 0.5 and fit_h <= self.page_w + 0.5:
-            return self.page_h, self.page_w  # page tournée à 90°
+            return self.page_h, self.page_w  # page rotated 90°
         raise ValueError(
             f"{self.tiles_rows}x{self.tiles_cols} feuilles de "
             f"{self.sheet_w:.0f}x{self.sheet_h:.0f}mm ne tiennent pas sur une page "
@@ -201,8 +202,8 @@ class SheetConfig:
         except ValueError as e:
             errors.append(str(e))
 
-        # Taille de bulle : vérifiée par FACE (pas sur le total), puisque
-        # le recto-verso répartit les questions sur 2 pages si besoin.
+        # Bubble size: checked per SIDE (not on the total), since
+        # double-sided printing splits the questions across 2 pages if needed.
         eff_scale = min(self.scale, MAX_SCALE)
         n1, _ = side_question_range(self, 0)
         _, n2 = side_question_range(self, 1)
@@ -222,8 +223,8 @@ class SheetConfig:
 
 
 # ---------------------------------------------------------------------
-# Mise en page dynamique (dépend uniquement de n_questions ; le reste du
-# "chrome" — titre, identité, exemple, en-têtes — a une hauteur fixe).
+# Dynamic layout (depends only on n_questions; the rest of the "chrome"
+# -- title, identity, example, headers -- has a fixed height).
 # ---------------------------------------------------------------------
 
 TITLE_Y = NATIVE_H - 11.0
@@ -231,34 +232,33 @@ SUBTITLE_Y = NATIVE_H - 16.0
 IDENTITY_Y = NATIVE_H - 24.0
 EXAMPLE_Y = NATIVE_H - 32.0
 EXAMPLE_DIVIDER_Y = NATIVE_H - 36.0
-GRID_TOP = NATIVE_H - 45.5     # y de la question 1
-BOTTOM_MARGIN = MARK_MARGIN + MARK_SIZE + 2.0   # marge de sécurité sous la grille
+GRID_TOP = NATIVE_H - 45.5     # y of question 1
+BOTTOM_MARGIN = MARK_MARGIN + MARK_SIZE + 2.0   # safety margin below the grid
 
-HEADER_TEXT_OFFSET = 2.6   # décalage baseline du texte d'en-tête sous son point de référence
-HEADER_CLEARANCE = 1.5     # marge visuelle mini entre le texte d'en-tête et le haut du rond suivant
-MID_GAP_AFTER = 2.5     # espace entre la dernière question du 1er bloc et le trait
-SPLIT_THRESHOLD = 7     # au-delà de ce nombre de questions, on scinde en 2 blocs avec rappel
+HEADER_TEXT_OFFSET = 2.6   # header text baseline offset below its reference point
+HEADER_CLEARANCE = 1.5     # minimum visual margin between header text and the next circle's top
+MID_GAP_AFTER = 2.5     # space between the 1st block's last question and the divider line
+SPLIT_THRESHOLD = 7     # beyond this many questions, split into 2 blocks with a recap
 
 
-MIN_TEXT_SHRINK_RATIO = 0.65  # le texte ne rétrécit jamais en dessous de 65% de sa taille nominale
+MIN_TEXT_SHRINK_RATIO = 0.65  # text never shrinks below 65% of its nominal size
 
 
 def text_shrink_ratio(cfg):
-    """Facteur de réduction du texte (numéros, en-têtes) dû au
-    resserrement des lignes quand il y a beaucoup de questions, PLAFONNÉ
-    à un minimum lisible (MIN_TEXT_SHRINK_RATIO) plutôt que de suivre
-    indéfiniment la taille des bulles."""
+    """Text (numbers, headers) shrink factor caused by rows tightening
+    when there are many questions, CAPPED at a readable minimum
+    (MIN_TEXT_SHRINK_RATIO) rather than following bubble size forever."""
     ratio = row_h_native(cfg.n_questions) / ROW_H
     return max(MIN_TEXT_SHRINK_RATIO, min(1.0, ratio))
 
 
 def header_gap(cfg):
-    """Espace vertical (mm, natif) nécessaire entre la position de
-    référence d'une ligne d'en-tête et la 1re ligne de bulles qui suit,
-    pour que le texte ne touche jamais les ronds. Utilise le MÊME
-    facteur de réduction que le texte lui-même (avec son plancher de
-    lisibilité) plutôt que la seule taille des bulles, sinon le texte
-    "plafonné" (donc parfois plus grand que la bulle) pourrait déborder."""
+    """Vertical space (mm, native) needed between a header row's
+    reference position and the following row of bubbles, so the text
+    never touches the circles. Uses the SAME shrink factor as the text
+    itself (with its readability floor) rather than just bubble size,
+    otherwise "capped" text (so sometimes bigger than the bubble) could
+    overflow."""
     effective_half_bubble = (BUBBLE_D / 2) * text_shrink_ratio(cfg)
     return max(bubble_d_native(cfg) / 2, effective_half_bubble) + HEADER_TEXT_OFFSET + HEADER_CLEARANCE
 
@@ -268,8 +268,8 @@ def available_grid_height():
 
 
 def split_layout(n_questions):
-    """Retourne (n1, n2) : nombre de questions dans le 1er et 2e bloc.
-    n2=0 si pas de scission (peu de questions, un seul bloc suffit)."""
+    """Returns (n1, n2): number of questions in the 1st and 2nd block.
+    n2=0 if there's no split (few questions, one block is enough)."""
     if n_questions <= SPLIT_THRESHOLD:
         return n_questions, 0
     n1 = (n_questions + 1) // 2
@@ -277,16 +277,16 @@ def split_layout(n_questions):
 
 
 def row_h_native(n_questions):
-    """Hauteur de ligne native (mm, échelle 1) pour que n_questions
-    tiennent dans l'espace disponible, avec ou sans scission en 2 blocs.
-    Pour le cas scindé, l'espace pris par l'en-tête de rappel dépend de
-    la taille des bulles, qui dépend elle-même de row_h -> résolu par
-    quelques itérations à point fixe (converge très vite)."""
+    """Native row height (mm, scale 1) so n_questions fit in the
+    available space, with or without splitting into 2 blocks. For the
+    split case, the space taken by the recap header depends on bubble
+    size, which itself depends on row_h -> solved by a few fixed-point
+    iterations (converges very quickly)."""
     n1, n2 = split_layout(n_questions)
     avail = available_grid_height()
     if n2 == 0:
         return avail / n1
-    row_h = avail / n_questions  # estimation initiale (sans le surcoût de l'en-tête)
+    row_h = avail / n_questions  # initial estimate (without the header overhead)
     for _ in range(5):
         bd = BUBBLE_RATIO * row_h
         overhead = MID_GAP_AFTER + (bd / 2 + HEADER_TEXT_OFFSET + HEADER_CLEARANCE)
@@ -295,8 +295,8 @@ def row_h_native(n_questions):
 
 
 def max_questions_for_scale(scale, min_bubble_mm=MIN_BUBBLE_MM):
-    """Nombre maximal de questions tenant à cette échelle tout en gardant
-    des bulles imprimées d'au moins `min_bubble_mm`."""
+    """Maximum number of questions fitting at this scale while keeping
+    printed bubbles of at least `min_bubble_mm`."""
     avail = available_grid_height()
     min_row_h_native = min_bubble_mm / (BUBBLE_RATIO * scale)
     n_no_split = int(avail / min_row_h_native)
@@ -308,8 +308,8 @@ def max_questions_for_scale(scale, min_bubble_mm=MIN_BUBBLE_MM):
 
 
 # ---------------------------------------------------------------------
-# Dessin (toutes les fonctions reçoivent `s` = échelle de la feuille ;
-# une coordonnée mm "native" x devient x*s*MM au moment du dessin).
+# Drawing (every function receives `s` = the sheet's scale; a "native"
+# mm coordinate x becomes x*s*MM at drawing time).
 # ---------------------------------------------------------------------
 
 def draw_finder_pattern(c, x, y, size):
@@ -353,9 +353,9 @@ def draw_id_pattern(c, x, y, size_pts, s, number):
 
 
 def draw_config_barcode(c, ox, oy, s, cfg, side=0):
-    """Dessine le code-barres de configuration : 15 barres verticales
-    fines (jamais confondues avec un repère carré), positionnées entre
-    les deux repères du bas de la feuille."""
+    """Draws the configuration barcode: 15 thin vertical bars (never
+    confused with a square marker), positioned between the sheet's two
+    bottom markers."""
     value = encode_config(cfg, side=side)
     bits = [(value >> (BARCODE_N_BITS - 1 - k)) & 1 for k in range(BARCODE_N_BITS)]
 
@@ -369,9 +369,9 @@ def draw_config_barcode(c, ox, oy, s, cfg, side=0):
         bar_y = oy + (y_center - BARCODE_BAR_H / 2) * s * MM
         bar_w = BARCODE_BAR_W * s * MM
         bar_h = BARCODE_BAR_H * s * MM
-        # Toujours dessiner un contour, plein seulement si bit=1 : ça
-        # garde chaque position repérable même à 0, utile pour un futur
-        # alignement fin si besoin.
+        # Always draw an outline, filled only if bit=1: this keeps every
+        # position identifiable even at 0, useful for future fine
+        # alignment if needed.
         c.setLineWidth(max(0.3, 0.4 * s))
         c.setFillColorRGB(0, 0, 0) if bit else c.setFillColorRGB(1, 1, 1)
         c.rect(bar_x, bar_y, bar_w, bar_h, fill=1, stroke=1)
@@ -405,31 +405,31 @@ def draw_corner_marks(c, ox, oy, s, sheet_number=None):
 
 
 def row_x_shift(cfg):
-    """Décalage horizontal (mm, natif) du bloc numéro+bulles, calculé
-    pour que ce bloc soit centré sur la largeur de la feuille, quel que
-    soit le nombre de colonnes de réponses (3 à 6)."""
+    """Horizontal shift (mm, native) of the number+bubbles block,
+    computed so this block is centered across the sheet's width,
+    regardless of the number of answer columns (3 to 6)."""
     bd = bubble_d_native(cfg)
-    content_left_local = GRID_LEFT_LOCAL - 2.0   # même repère que label_left dans draw_bubble_row
+    content_left_local = GRID_LEFT_LOCAL - 2.0   # same reference as label_left in draw_bubble_row
     content_right_local = GRID_LEFT_LOCAL + COL_Q_LABEL_W + (cfg.n_choices - 1) * BUBBLE_GAP + bd
     content_w = content_right_local - content_left_local
-    margin = 6.0   # même marge que les traits/lignes du reste de la feuille
+    margin = 6.0   # same margin as the rest of the sheet's lines/rules
     usable_w = NATIVE_W - 2 * margin
     desired_left = margin + (usable_w - content_w) / 2
     return desired_left - content_left_local
 
 
 def bubble_x(i, cfg):
-    """Position x LOCALE (mm, avant application du décalage de centrage
-    row_x_shift) de la colonne i."""
+    """LOCAL x position (mm, before applying the row_x_shift centering
+    offset) of column i."""
     return GRID_LEFT_LOCAL + COL_Q_LABEL_W + i * BUBBLE_GAP + bubble_d_native(cfg) / 2
 
 
 def bubble_d_native(cfg):
-    """Diamètre natif (mm, échelle 1) des bulles, dépendant du nombre de
-    questions : la hauteur de ligne varie avec n_questions (cf.
-    row_h_native), et le diamètre de bulle suit dans le même rapport —
-    plus de questions -> lignes plus fines -> bulles plus petites (mais
-    jamais sous MIN_BUBBLE_MM/scale, cf. validate())."""
+    """Native bubble diameter (mm, scale 1), depending on the number of
+    questions: row height varies with n_questions (see row_h_native),
+    and bubble diameter follows in the same ratio -- more questions ->
+    thinner rows -> smaller bubbles (but never below
+    MIN_BUBBLE_MM/scale, see validate())."""
     return BUBBLE_RATIO * row_h_native(cfg.n_questions)
 
 
@@ -447,12 +447,11 @@ def draw_row_shade(c, ox, oy, s, row_y_local, row_h, cfg):
 
 
 def text_scale(cfg):
-    """Échelle effective pour le texte (numéros, en-têtes de colonnes) :
-    l'échelle globale de la feuille, réduite si les lignes sont plus
-    fines que la référence à 12 questions — mais jamais en dessous d'un
-    plancher lisible (cf. text_shrink_ratio). Ne grossit jamais au-delà
-    de l'échelle normale quand les lignes sont plus généreuses (peu de
-    questions) : seul le resserrement est corrigé."""
+    """Effective scale for text (numbers, column headers): the sheet's
+    overall scale, reduced if rows are thinner than the 12-question
+    reference -- but never below a readable floor (see
+    text_shrink_ratio). Never grows beyond the normal scale when rows
+    are more generous (few questions): only tightening is corrected."""
     return cfg.scale * text_shrink_ratio(cfg)
 
 
@@ -499,11 +498,11 @@ def draw_bubble_row(c, ox, oy, s, row_y_local, label, cfg, filled_indices=None,
 
 
 def draw_identity_field(c, ox, y_id, s, x0_local, x1_local, text=None):
-    """Dessine le champ d'identité (Nom ou Classe) entre les abscisses
-    locales x0_local/x1_local (mm, natif) : soit une ligne à remplir à la
-    main (comportement par défaut, `text=None`), soit `text` imprimé
-    directement dessus (nom/classe déjà connu depuis un CSV) — dans ce
-    cas la ligne est omise, le texte la remplace."""
+    """Draws the identity field (Nom/"Name" or Classe/"Class") between
+    local x0_local/x1_local abscissas (mm, native): either a line to
+    fill in by hand (default behavior, `text=None`), or `text` printed
+    directly on it (name/class already known from a CSV) -- in that
+    case the line is omitted, the text replaces it."""
     x0 = ox + x0_local * s * MM
     x1 = ox + x1_local * s * MM
     if not text:
@@ -529,8 +528,8 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
     c.setFont("Helvetica", 8 * s)
     c.drawCentredString(ox + (NATIVE_W * s / 2) * MM, oy + SUBTITLE_Y * s * MM, cfg.subtitle)
 
-    # --- Identité --- (nom/classe imprimés directement si fournis, sinon
-    # ligne à remplir à la main, cf. draw_identity_field)
+    # --- Identity --- (name/class printed directly if provided, else a
+    # line to fill in by hand, see draw_identity_field)
     y_id = oy + IDENTITY_Y * s * MM
     c.setFillColorRGB(0, 0, 0)
     c.setFont("Helvetica", 8 * s)
@@ -545,11 +544,11 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
         draw_identity_field(c, ox, y_id, s, 16, 90, nom)
     c.setFillColorRGB(0, 0, 0)
 
-    # --- Config ajustée à cette face (même moteur, n_questions = celui de cette face) ---
+    # --- Config adjusted for this side (same engine, n_questions = this side's count) ---
     start_q, n_side = side_question_range(cfg, side)
     cfg_side = dataclass_replace(cfg, n_questions=n_side)
 
-    # --- Exemple --- (bulles à la même taille que les questions -> cfg_side)
+    # --- Example --- (bubbles the same size as the questions -> cfg_side)
     example_filled = [1, 3] if cfg.n_choices >= 4 else [cfg.n_choices - 1]
     ex_letters = [cfg.choices[i] for i in example_filled]
     right_edge = draw_bubble_row(c, ox, oy, s, EXAMPLE_Y, "Exemple :", cfg_side,
@@ -566,9 +565,9 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
         font_sz -= 0.3
     c.setFont("Helvetica-Oblique", font_sz)
     if c.stringWidth(full_text, "Helvetica-Oblique", font_sz) > max_w:
-        # Toujours pas assez de place sur une ligne : retour à la ligne
-        # après "réponse(s)" plutôt que de rogner le texte ou la taille.
-        # Les deux lignes sont centrées entre caption_x et le bord droit.
+        # Still not enough room on one line: wrap to a new line after
+        # "réponse(s)" rather than cropping the text or its size. Both
+        # lines are centered between caption_x and the right edge.
         line_center_x = caption_x + max_w / 2
         c.drawCentredString(line_center_x, oy + (EXAMPLE_Y + 0.6) * s * MM, prefix)
         c.drawCentredString(line_center_x, oy + (EXAMPLE_Y - 2.2) * s * MM, letters_part)
@@ -581,7 +580,7 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
            ox + (NATIVE_W - 6) * s * MM, oy + EXAMPLE_DIVIDER_Y * s * MM)
     c.setStrokeColorRGB(0, 0, 0)
 
-    # --- Grille de questions (nombre variable, scindée en 2 si besoin) ---
+    # --- Question grid (variable count, split into 2 if needed) ---
     n1, n2 = split_layout(n_side)
     row_h = row_h_native(n_side)
     gap = header_gap(cfg_side)
@@ -621,8 +620,8 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
 
 
 def build(path, cfg, numbers=None):
-    """numbers : liste de numéros (1-255), un par tuile de la page
-    (longueur tiles_rows*tiles_cols), ou None pour des repères normaux."""
+    """numbers: list of numbers (1-255), one per tile on the page
+    (length tiles_rows*tiles_cols), or None for plain markers."""
     cfg.validate()
     page_w, page_h = cfg.resolve_page_size()
     c = canvas.Canvas(path, pagesize=(page_w * MM, page_h * MM))
@@ -655,21 +654,21 @@ def build(path, cfg, numbers=None):
 
 
 def build_batch(path, cfg, start_number=1, n_sheets=None, identities=None):
-    """Génère un PDF multi-pages, une tuile = une feuille numérotée,
-    numéros consécutifs à partir de start_number. n_sheets par défaut
-    = tiles_rows*tiles_cols (une seule page).
+    """Generates a multi-page PDF, one tile = one numbered sheet,
+    consecutive numbers starting from start_number. n_sheets defaults to
+    tiles_rows*tiles_cols (a single page).
 
-    identities : {numero (int): (nom, classe)} optionnel — si fourni pour
-    une feuille, son nom et/ou sa classe (l'un des deux peut être None)
-    sont imprimés directement sur la fiche au lieu de la ligne à remplir
-    à la main (cf. draw_identity_field).
+    identities: {numero (int): (nom, classe)} optional -- if provided
+    for a sheet, its name and/or class (either can be None) are printed
+    directly on the sheet instead of the line to fill in by hand (see
+    draw_identity_field).
 
-    Si le nombre de questions ne tient pas sur une face (recto-verso
-    nécessaire), chaque page de tuiles est immédiatement suivie de sa
-    page verso correspondante (mêmes numéros, questions 2e moitié) —
-    fonctionne nativement avec l'impression recto-verso automatique
-    tant qu'il y a 1 seule feuille par page (cfg.tiles_rows=tiles_cols=1,
-    le cas normal pour une feuille déjà à la taille maximale A4)."""
+    If the number of questions doesn't fit on one side (double-sided
+    needed), each tile page is immediately followed by its matching
+    back page (same numbers, 2nd half of the questions) -- works
+    natively with automatic double-sided printing as long as there's 1
+    sheet per page (cfg.tiles_rows=tiles_cols=1, the normal case for a
+    sheet already at the maximum A4 size)."""
     cfg.validate()
     page_w, page_h = cfg.resolve_page_size()
     n_tiles = cfg.tiles_rows * cfg.tiles_cols
@@ -716,11 +715,11 @@ def build_batch(path, cfg, start_number=1, n_sheets=None, identities=None):
 
 
 # ---------------------------------------------------------------------
-# Coordonnées canoniques (mm, échelle 1) pour le script de LECTURE.
-# Utilisent exactement les mêmes fonctions que le dessin (bubble_x,
-# row_x_shift, row_h_native, header_gap...) : générateur et lecteur ne
-# peuvent donc plus diverger, contrairement à avant où sheet_layout_v2.py
-# maintenait ses propres constantes séparément.
+# Canonical coordinates (mm, scale 1) for the READING script. Use
+# exactly the same functions as drawing (bubble_x, row_x_shift,
+# row_h_native, header_gap...): generator and reader therefore can no
+# longer diverge, unlike before when sheet_layout_v2.py kept its own
+# constants separately.
 # ---------------------------------------------------------------------
 
 def corner_points_for(cfg):
@@ -733,7 +732,7 @@ def corner_points_for(cfg):
 
 
 def bubble_centers_for(cfg, side=0):
-    """{numero_question GLOBAL (selon side_question_range): [(x_mm, y_mm) par colonne]}."""
+    """{GLOBAL question number (per side_question_range): [(x_mm, y_mm) per column]}."""
     start_q, n_side = side_question_range(cfg, side)
     cfg_side = dataclass_replace(cfg, n_questions=n_side)
     n1, n2 = split_layout(n_side)
@@ -761,21 +760,21 @@ def example_bubble_centers_for(cfg, side=0):
 
 
 def blank_reference_points_for(cfg, side=0):
-    """Point de papier vierge à droite de la dernière colonne de chaque
-    ligne, à la même hauteur que les bulles."""
+    """Blank-paper point to the right of the last column of each row,
+    at the same height as the bubbles."""
     _, n_side = side_question_range(cfg, side)
     cfg_side = dataclass_replace(cfg, n_questions=n_side)
     bubble_pts = bubble_centers_for(cfg, side=side)
     bd = bubble_d_native(cfg_side)
     last_bubble_x = row_x_shift(cfg_side) + bubble_x(cfg.n_choices - 1, cfg_side)
-    # à mi-chemin entre la dernière bulle et le bord droit de la feuille
+    # halfway between the last bubble and the sheet's right edge
     x_blank = last_bubble_x + (NATIVE_W - 6 - last_bubble_x) / 2 + bd / 2
     return {q: (x_blank, pts[0][1]) for q, pts in bubble_pts.items()}
 
 
 def id_bit_cell_centers_for(cfg):
-    """8 positions (x_mm, y_mm), en mm natifs (PAS en points reportlab -
-    contrairement à bit_grid_geometry(), qui sert au dessin)."""
+    """8 positions (x_mm, y_mm), in native mm (NOT in reportlab points,
+    unlike bit_grid_geometry(), which is used for drawing)."""
     mark_x0 = NATIVE_W - MARK_MARGIN - MARK_SIZE
     mark_y0 = NATIVE_H - MARK_MARGIN - MARK_SIZE
     border_mm = ID_BORDER

@@ -1,9 +1,10 @@
 """
-Coordonnées canoniques de la grille v2 (5 colonnes, ronds vides, en-têtes
-séparées, motif numéroté au coin haut-droit), en mm, origine bas-gauche.
+Canonical coordinates for the v2 grid (5 columns, empty circles,
+separate headers, numbered pattern in the top-right corner), in mm,
+origin at bottom-left.
 
-Reprend exactement la géométrie de generate_sheet_a6_v2.py — toute
-modification de ce dernier doit être répercutée ici.
+Reuses exactly the geometry of generate_sheet_a6_v2.py -- any change to
+that file must be mirrored here.
 """
 
 A6_W = 105.0
@@ -21,24 +22,24 @@ COL_Q_LABEL_W = 8.0
 GRID_LEFT_LOCAL = 8.0
 ROW_X_SHIFT = 10.0
 
-GRID_TOP_LOCAL = A6_H - 45.5   # haut de la grille, ligne de la question 1
+GRID_TOP_LOCAL = A6_H - 45.5   # top of the grid, question 1's row
 ROW_H = 6.6
-MID_GAP_AFTER_Q6 = 2.5         # espace entre Q6 et le trait du rappel du milieu
-MID_TO_Q7_GAP = 5.0            # espace entre le rappel du milieu et Q7
+MID_GAP_AFTER_Q6 = 2.5         # space between Q6 and the mid-recap divider line
+MID_TO_Q7_GAP = 5.0            # space between the mid-recap and Q7
 
-# Motif numéroté (coin haut-droit)
+# Numbered pattern (top-right corner)
 N_ID_BITS = 8
 ID_BORDER = 1.0
 ID_GAP = 0.5
 ID_COLS, ID_ROWS = 4, 2
 
-# Point d'échantillonnage du papier vierge (à droite de la colonne E)
+# Blank-paper sampling point (to the right of column E)
 BLANK_REF_X = 85.0
 
 
 def corner_points():
-    """4 points de calage, en mm. Clés : 'TL', 'TR' (motif numéroté),
-    'BL' (motifs QR-like) et 'BR' (petit carré plein)."""
+    """4 alignment points, in mm. Keys: 'TL', 'TR' (numbered pattern),
+    'BL' (QR-like patterns) and 'BR' (small solid square)."""
     return {
         "TL": (MARK_MARGIN + MARK_SIZE / 2, A6_H - MARK_MARGIN - MARK_SIZE / 2),
         "TR": (A6_W - MARK_MARGIN - MARK_SIZE / 2, A6_H - MARK_MARGIN - MARK_SIZE / 2),
@@ -52,8 +53,8 @@ def _bubble_x(i):
 
 
 def _row_y(q):
-    """y (mm) de la ligne de la question q (1..12), gère la coupure/rappel
-    après la question 6."""
+    """y (mm) of question q's row (1..12), handles the split/recap after
+    question 6."""
     if q <= 6:
         return GRID_TOP_LOCAL - (q - 1) * ROW_H
     mid_y = GRID_TOP_LOCAL - 6 * ROW_H - MID_GAP_AFTER_Q6
@@ -62,7 +63,7 @@ def _row_y(q):
 
 
 def bubble_centers():
-    """{numero_question (1..12): [(x_mm, y_mm) pour A,B,C,D,E]}."""
+    """{question_number (1..12): [(x_mm, y_mm) for A,B,C,D,E]}."""
     result = {}
     for q in range(1, N_QUESTIONS + 1):
         y = _row_y(q)
@@ -71,21 +72,21 @@ def bubble_centers():
 
 
 def example_bubble_centers():
-    """Ligne 'Exemple :', même géométrie qu'une question normale."""
+    """'Example:' row, same geometry as a normal question."""
     y = A6_H - 32.0
     return [(_bubble_x(i), y) for i in range(len(CHOICES))]
 
 
 def blank_reference_points():
-    """{numero_question (1..12): (x_mm, y_mm)} d'un point de papier
-    vierge à la hauteur de chaque ligne de réponse."""
+    """{question_number (1..12): (x_mm, y_mm)} of a blank-paper point at
+    the height of each answer row."""
     return {q: (BLANK_REF_X, _row_y(q)) for q in range(1, N_QUESTIONS + 1)}
 
 
 def id_bit_cell_centers():
-    """8 positions (x_mm, y_mm) des cases du motif numéroté (coin
-    haut-droit), dans l'ordre bit 7 (MSB) -> bit 0."""
-    mark_x0 = A6_W - MARK_MARGIN - MARK_SIZE  # bas-gauche du motif
+    """8 positions (x_mm, y_mm) of the numbered pattern's cells
+    (top-right corner), in order from bit 7 (MSB) to bit 0."""
+    mark_x0 = A6_W - MARK_MARGIN - MARK_SIZE  # pattern's bottom-left
     mark_y0 = A6_H - MARK_MARGIN - MARK_SIZE
     inner = MARK_SIZE - 2 * (ID_BORDER + ID_GAP)
     cell_w = inner / ID_COLS
@@ -103,9 +104,9 @@ def id_bit_cell_centers():
     return centers
 
 
-# Zone "Nom : ____ Classe : ____" (coin bas-gauche, coin haut-droit du
-# rectangle à extraire), en mm, marge généreuse autour du texte imprimé
-# et des lignes à remplir.
+# "Nom : ____ Classe : ____" ("Name:"/"Class:") area (bottom-left corner,
+# top-right corner of the rectangle to extract), in mm, generous margin
+# around the printed text and the lines to fill in.
 IDENTITY_ZONE = {
     "x0": 3.0, "y0": A6_H - 24.0 - 5.0,
     "x1": 95.0, "y1": A6_H - 24.0 + 6.0,
@@ -113,8 +114,8 @@ IDENTITY_ZONE = {
 
 
 def identity_zone_corners():
-    """4 coins (mm) de la zone Nom/Classe, dans l'ordre
-    haut-gauche, haut-droit, bas-droit, bas-gauche."""
+    """4 corners (mm) of the Name/Class area, in order top-left,
+    top-right, bottom-right, bottom-left."""
     z = IDENTITY_ZONE
     return [
         (z["x0"], z["y1"]), (z["x1"], z["y1"]),

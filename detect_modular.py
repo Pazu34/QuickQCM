@@ -1,26 +1,27 @@
 """
-Lecture optique de la feuille v2.
+Optical reading of the v2 sheet.
 
-Simplifications par rapport à la v1 (permises par le nouveau design) :
-- Plus de lettre imprimée dans les bulles -> plus besoin de la correction
-  par lettre (25e percentile), ni de la comparaison relative à la ligne.
-  Chaque bulle est jugée sur une échelle absolue (blanc local -> noir
-  local), indépendamment des autres bulles de sa ligne.
-- Ajout du décodage du numéro de feuille (motif 8 bits, coin haut-droit).
-- Ajout d'un signalement des cas incertains : toute bulle dont le niveau
-  de noirceur tombe dans une zone grise (proche du seuil de décision)
-  est renvoyée comme "à vérifier" plutôt que tranchée au hasard.
+Simplifications compared to v1 (enabled by the new design):
+- No more letter printed inside the bubbles -> no more need for
+  per-letter correction (25th percentile), nor for row-relative
+  comparison. Every bubble is judged on an absolute scale (local white
+  -> local black), independently from the other bubbles in its row.
+- Added sheet-number decoding (8-bit pattern, top-right corner).
+- Added a flag for uncertain cases: any bubble whose darkness level
+  falls in a gray zone (close to the decision threshold) is returned as
+  "to check" rather than decided at random.
 
-Le repérage des 4 coins et le calibrage blanc/noir par ligne sont repris
-tels quels de detect.py (même géométrie de motifs, donc même code).
-"""
+Corner detection and per-row white/black calibration are reused as-is
+from detect.py (same marker geometry, hence same code). Status/output
+text stays in French throughout this module (see qcm_app.py's
+translated wrapper text and status_label() for the interface layer)."""
 import sys
 import os
 import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sheet_layout_v2 import corner_points  # géométrie des coins, indépendante de cfg
+from sheet_layout_v2 import corner_points  # corner geometry, independent of cfg
 import dataclasses
 from generate_sheet_modular import (
     SheetConfig, bubble_centers_for, example_bubble_centers_for,
@@ -32,8 +33,8 @@ from generate_sheet_modular import (
 
 
 # ---------------------------------------------------------------------
-# Repérage des coins et homographie (identique à la v1 : même silhouette
-# de motifs, donc même logique de détection).
+# Corner detection and homography (identical to v1: same marker
+# silhouette, hence same detection logic).
 # ---------------------------------------------------------------------
 
 def find_candidate_squares(gray):
@@ -165,8 +166,8 @@ def check_resolution(H):
 
 
 # ---------------------------------------------------------------------
-# Calibrage du contraste local (blanc du papier + noir des cercles
-# imprimés), identique dans l'esprit à la v1.
+# Local contrast calibration (paper white + printed circles' black),
+# same idea as v1.
 # ---------------------------------------------------------------------
 
 def read_mean_gray(gray, cx, cy, radius_px):
@@ -209,9 +210,9 @@ def illumination_at(coeffs, y_mm):
 
 
 def fit_illumination_curve(gray, H, cfg, side=0, degree=2):
-    """Blanc (papier vierge à droite de la dernière colonne) + noir
-    (trait des cercles imprimés) de chaque ligne, ajustés par un
-    polynôme en fonction de la hauteur sur la feuille."""
+    """White (blank paper to the right of the last column) + black
+    (printed circles' outline) of each row, fitted with a polynomial as
+    a function of height on the sheet."""
     blank_pts = blank_reference_points_for(cfg, side=side)
     bubble_pts = bubble_centers_for(cfg, side=side)
     _, n_side = side_question_range(cfg, side)
@@ -240,26 +241,25 @@ def fit_illumination_curve(gray, H, cfg, side=0, degree=2):
 
 
 # ---------------------------------------------------------------------
-# Lecture des bulles : échelle absolue (plus de comparaison relative à
-# la ligne, plus de correction par lettre — permis par les ronds vides).
+# Bubble reading: absolute scale (no more row-relative comparison, no
+# more per-letter correction -- enabled by the empty circles).
 # ---------------------------------------------------------------------
 
-FILL_THRESHOLD = 0.21     # valeur de repli si aucune séparation nette n'est trouvée
-UNCERTAIN_MARGIN = 0.075  # idem
+FILL_THRESHOLD = 0.21     # fallback value if no clean separation is found
+UNCERTAIN_MARGIN = 0.075  # same
 
 
 def find_adaptive_threshold(values, min_gap=0.08, margin_fraction=0.3):
-    """Cherche le plus grand écart dans la liste triée des valeurs de
-    noirceur normalisée d'une feuille, pour séparer automatiquement les
-    bulles vides des bulles cochées — sans supposer à l'avance un style
-    de marquage particulier (coloriage, croix, crayon clair...).
+    """Looks for the biggest gap in the sorted list of a sheet's
+    normalized darkness values, to automatically separate empty bubbles
+    from marked ones -- without assuming a particular marking style up
+    front (shading, cross, light pencil...).
 
-    Retourne (seuil, marge) au milieu du plus grand écart trouvé, avec une
-    marge proportionnelle à la largeur de cet écart (un écart net donne
-    une marge large -> peu de signalements ; un écart resserré donne une
-    marge étroite -> plus de signalements). Retourne None si aucun écart
-    suffisant n'est trouvé (feuille entièrement vide, entièrement cochée,
-    ou image trop dégradée pour séparer proprement)."""
+    Returns (threshold, margin) in the middle of the biggest gap found,
+    with a margin proportional to that gap's width (a clean gap gives a
+    wide margin -> few flags; a tight gap gives a narrow margin -> more
+    flags). Returns None if no sufficient gap is found (entirely blank
+    sheet, entirely marked, or image too degraded to cleanly separate)."""
     sorted_vals = sorted(values)
     best_gap, best_idx = 0.0, None
     for i in range(1, len(sorted_vals)):
@@ -275,11 +275,11 @@ def find_adaptive_threshold(values, min_gap=0.08, margin_fraction=0.3):
 
 
 def extract_identity_zone(img, H, cfg, px_per_mm=14):
-    """Redresse (perspective) la zone 'Nom : ... Classe : ...' en une
-    image rectangulaire propre, à partir de l'homographie déjà calculée
-    pour cette feuille. Utile pour montrer au correcteur qui a rempli une
-    copie dont le numéro ne correspond à personne dans la liste."""
-    z = identity_zone_corners_for(cfg)  # HG, HD, BD, BG
+    """Straightens (perspective) the 'Nom : ... Classe : ...' area into
+    a clean rectangular image, from the homography already computed for
+    this sheet. Useful to show the teacher who filled in a copy whose
+    number doesn't match anyone in the roster."""
+    z = identity_zone_corners_for(cfg)  # TL, TR, BR, BL
     src_img_pts = np.float32([mm_to_image(H, x, y) for (x, y) in z])
 
     width_mm = z[1][0] - z[0][0]
@@ -293,12 +293,12 @@ def extract_identity_zone(img, H, cfg, px_per_mm=14):
 
 
 def read_config_barcode(gray, H):
-    """Décode le code-barres de configuration (16 barres, position FIXE
-    -- indépendante de cfg, donc lisible avant même de savoir quelle
-    configuration a été utilisée). Auto-calibre son propre seuil noir/
-    blanc à partir de la plage de valeurs observée sur les 16 barres
-    elles-mêmes (comme un vrai code-barres), avec un repli sur le motif
-    du coin haut-gauche si jamais les 16 barres se ressemblent trop."""
+    """Decodes the configuration barcode (16 bars, FIXED position --
+    independent of cfg, so readable even before knowing which
+    configuration was used). Self-calibrates its own black/white
+    threshold from the range of values observed on the 16 bars
+    themselves (like a real barcode), falling back to the top-left
+    corner marker if the 16 bars ever look too similar."""
     positions = config_barcode_bit_positions()
     raw_vals = []
     for (x_mm, y_mm) in positions:
@@ -308,8 +308,8 @@ def read_config_barcode(gray, H):
 
     lo, hi = min(raw_vals), max(raw_vals)
     if hi - lo < 30:
-        # Barres trop semblables pour s'auto-calibrer (cas improbable) :
-        # on se rabat sur le noir du repère TL et un point de marge blanc.
+        # Bars too similar to self-calibrate (unlikely case): fall back
+        # to the TL marker's black and a white margin point.
         canon = corner_points()
         tl_x, tl_y = canon["TL"]
         scale = local_scale_px_per_mm(H, tl_x, tl_y)
@@ -331,22 +331,21 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
             adaptive=True, debug_out=None, illumination_degree=2,
             identity_crop_out=None):
     """
-    cfg : SheetConfig utilisée pour générer la feuille. Si non précisée
-    (par défaut), elle est lue automatiquement depuis le code-barres de
-    configuration imprimé en bas de la feuille — plus besoin de la
-    connaître ou de la ressaisir à la main (recto/verso compris).
+    cfg: SheetConfig used to generate the sheet. If not given (default),
+    it's read automatically from the configuration barcode printed at
+    the bottom of the sheet -- no need to know it or re-enter it by hand
+    (front/back included).
 
-    side : uniquement utile si `cfg` est fourni à la main (0=recto,
-    1=verso) ; ignoré si cfg=None, puisqu'alors la face est lue
-    directement depuis le code-barres.
+    side: only useful if `cfg` is given by hand (0=front, 1=back);
+    ignored if cfg=None, since then the side is read directly from the
+    barcode.
 
-    adaptive=True (par défaut) : le seuil et la marge sont recalculés à
-    partir des propres valeurs de CETTE feuille (plus grand écart entre
-    bulles claires et bulles sombres) plutôt que d'utiliser des constantes
-    fixes — s'adapte naturellement au style de marquage (coloriage, croix,
-    crayon clair, stylo noir...) sans réglage manuel par style.
-    Passer adaptive=False pour forcer fill_threshold/uncertain_margin
-    (ou leurs valeurs par défaut) à la place.
+    adaptive=True (default): threshold and margin are recomputed from
+    THIS sheet's own values (biggest gap between light and dark
+    bubbles) rather than using fixed constants -- naturally adapts to
+    the marking style (shading, cross, light pencil, black pen...)
+    without manual tuning per style. Pass adaptive=False to force
+    fill_threshold/uncertain_margin (or their default values) instead.
     """
     img = cv2.imread(image_path)
     if img is None:
@@ -377,7 +376,7 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
 
     white_coeffs, black_coeffs = fit_illumination_curve(gray, H, cfg, side=side, degree=illumination_degree)
 
-    # --- Numéro de feuille (motif 8 bits, coin haut-droit) ---
+    # --- Sheet number (8-bit pattern, top-right corner) ---
     bits = []
     for (x_mm, y_mm) in id_bit_cell_centers_for(cfg):
         scale = local_scale_px_per_mm(H, x_mm, y_mm)
@@ -392,7 +391,7 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
     for bit in bits:
         sheet_number = (sheet_number << 1) | bit
 
-    # --- Bulles : passe 1, mesure brute de toutes les valeurs ---
+    # --- Bubbles: pass 1, raw measurement of every value ---
     centers = bubble_centers_for(cfg, side=side)
     _, n_side_count = side_question_range(cfg, side)
     bd = bubble_d_native(dataclasses.replace(cfg, n_questions=n_side_count))
@@ -408,42 +407,41 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
             w = illumination_at(white_coeffs, y_mm)
             b = illumination_at(black_coeffs, y_mm)
             span = max(w - b, 1.0)
-            normalized = (w - raw) / span  # 0 = blanc local, 1 = noir local
+            normalized = (w - raw) / span  # 0 = local white, 1 = local black
             row_vals.append(normalized)
             row_px.append((cx, cy, radius_px))
         raw_values[q] = row_vals
         px_positions[q] = row_px
 
-    # --- Correction de la dérive résiduelle le long de la feuille ---
-    # Même après le calibrage blanc/noir par ligne, un résidu de perte de
-    # contraste peut subsister sur une grande feuille (cf. le même
-    # phénomène rencontré et corrigé sur la v1). On compare donc chaque
-    # bulle au minimum de SA PROPRE ligne, ce qui absorbe toute dérive
-    # encore présente à cet endroit précis de la feuille.
+    # --- Correcting residual drift along the sheet ---
+    # Even after per-row white/black calibration, a residual contrast
+    # loss can remain on a large sheet (see the same phenomenon
+    # encountered and fixed in v1). So each bubble is compared to the
+    # minimum of ITS OWN row, which absorbs any drift still present at
+    # that exact spot on the sheet.
     row_min = {q: min(vals) for q, vals in raw_values.items()}
     detrended = {q: [v - row_min[q] for v in vals] for q, vals in raw_values.items()}
 
-    # --- Seuil et marge : GLOBAL (repli robuste, calculé sur toutes les
-    # bulles de la feuille) puis, pour CHAQUE LIGNE, un seuil LOCAL propre
-    # à cette ligne si elle présente son propre écart net. Un élève qui
-    # appuie plus fort sur certaines réponses que d'autres (crayon clair
-    # sur une question, stylo appuyé sur une autre) ne doit pas faire
-    # rater les réponses plus légèrement marquées : le seuil GLOBAL,
-    # calculé sur toutes les bulles mélangées, serait sinon tiré vers le
-    # haut par les réponses les plus foncées et manquerait les plus
-    # légères (constaté sur une copie réelle : Q1 coloriée en foncé,
-    # Q2-Q8 en gris clair, seule Q1 détectée). Le seuil global reste le
-    # repli utilisé pour une ligne qui n'a pas d'écart net à elle seule
-    # (ligne vierge, ou marquage trop ambigu même localement).
+    # --- Threshold and margin: GLOBAL (robust fallback, computed over
+    # every bubble on the sheet) then, for EACH ROW, a LOCAL threshold
+    # of its own if that row shows its own clean gap. A student who
+    # presses harder on some answers than others (light pencil on one
+    # question, heavy pen on another) shouldn't cause the more lightly
+    # marked answers to be missed: the GLOBAL threshold, computed over
+    # every bubble mixed together, would otherwise be pulled upward by
+    # the darkest answers and miss the lighter ones (observed on a real
+    # copy: Q1 shaded dark, Q2-Q8 in light gray, only Q1 detected). The
+    # global threshold remains the fallback used for a row that has no
+    # clean gap on its own (blank row, or marking too ambiguous even
+    # locally).
     ROW_MIN_GAP = 0.05
-    # Si même la bulle la MOINS sombre d'une ligne dépasse déjà cette
-    # valeur, aucune bulle de cette ligne ne ressemble à du papier
-    # vierge -- peut-être que TOUTES les bulles de cette ligne sont
-    # cochées (4/4, 5/5...), ou la zone est salie/ombragée. Le recalage
-    # par rapport au minimum de la ligne (cf. detrended) n'a alors plus
-    # de sens (il prendrait la bulle la "moins cochée" pour du blanc) :
-    # la ligne est signalée pour vérification manuelle plutôt que
-    # risquer de la lire silencieusement comme entièrement vide.
+    # If even a row's LEAST dark bubble already exceeds this value, no
+    # bubble in that row looks like blank paper -- maybe ALL the bubbles
+    # in that row are marked (4/4, 5/5...), or the area is smudged/
+    # shaded. Re-basing against the row's minimum (see detrended) no
+    # longer makes sense then (it would mistake the "least marked"
+    # bubble for white): the row is flagged for manual review rather
+    # than risk silently reading it as entirely blank.
     ROW_SUSPECT_MIN_RAW = 0.25
     row_thresholds = {}
     suspect_rows = set()
@@ -466,9 +464,9 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
             elif global_found is not None:
                 row_thresholds[q] = (global_threshold, global_margin)
             else:
-                # Ni seuil local (cette ligne) ni seuil global (toute la
-                # feuille) : aucune séparation fiable, cette ligne est
-                # entièrement signalée pour correction manuelle.
+                # Neither a local threshold (this row) nor a global one
+                # (the whole sheet): no reliable separation, this row is
+                # flagged entirely for manual correction.
                 row_thresholds[q] = None
         sheet_needs_manual_review = not any_threshold_found
         used_threshold = global_threshold if global_threshold is not None else FILL_THRESHOLD
@@ -481,8 +479,8 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
         for q in detrended:
             row_thresholds[q] = (used_threshold, used_margin)
 
-    # --- Bulles : passe 2, décision avec le seuil retenu (local à la
-    # ligne quand il existe, sinon repli global) ---
+    # --- Bubbles: pass 2, decision with the chosen threshold (local to
+    # the row when it exists, otherwise the global fallback) ---
     results = {}
     debug_img = img.copy() if debug_out else None
 
@@ -496,9 +494,9 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
             row_result["confidence"][letter] = round(raw_values[q][i], 3)
 
             if row_is_suspect or row_thresh is None:
-                # Ligne suspecte (aucune bulle blanche de référence) ou
-                # sans seuil fiable : on ne tranche rien, elle est
-                # signalée pour une correction manuelle.
+                # Suspect row (no reference white bubble) or no
+                # reliable threshold: nothing is decided, it's flagged
+                # for manual correction.
                 row_result["flagged"].append(letter)
             else:
                 row_threshold, row_margin = row_thresh
@@ -511,11 +509,11 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
             if debug_img is not None:
                 cx, cy, radius_px = px_positions[q][i]
                 if letter in row_result["flagged"]:
-                    color = (0, 165, 255)  # orange : incertain
+                    color = (0, 165, 255)  # orange: uncertain
                 elif letter in row_result["answers"]:
-                    color = (0, 200, 0)    # vert : coché
+                    color = (0, 200, 0)    # green: marked
                 else:
-                    color = (0, 0, 255)    # rouge : vide
+                    color = (0, 0, 255)    # red: blank
                 cv2.circle(debug_img, (int(cx), int(cy)), int(radius_px), color, 2)
 
         results[q] = row_result
@@ -542,8 +540,9 @@ def analyse(image_path, cfg=None, side=0, fill_threshold=None, uncertain_margin=
 
 
 def format_report(result):
-    """Petit résumé lisible : réponses détectées + liste des cas à
-    vérifier à la main."""
+    """Small human-readable summary: detected answers + list of cases
+    to check by hand. Output text intentionally stays in French (see
+    module docstring)."""
     lines = [f"Feuille n\u00b0 {result['sheet_number']}"]
     if result.get("sheet_needs_manual_review"):
         lines.append("\u26a0\ufe0f AUCUNE SÉPARATION NETTE TROUVÉE — feuille entière à corriger à la main")

@@ -1,22 +1,25 @@
 """
-Correspondance numéro de feuille <-> élève, à partir d'un tableau
-(CSV à 2 colonnes : numero,nom — une colonne classe optionnelle).
+Sheet-number <-> student matching, from a table (2-column CSV:
+numero,nom -- French for "number,name" -- with an optional classe
+["class"] column; these field names are used as-is throughout the data
+model, see also generate_sheet_modular.py and qcm_app.py).
 
-Gère nativement le recto-verso : deux photos (recto + verso) portant le
-même numéro de feuille sont automatiquement fusionnées en un seul
-résultat par élève, couvrant l'ensemble des questions.
+Natively handles double-sided sheets: two photos (front + back) bearing
+the same sheet number are automatically merged into a single result per
+student, covering the full set of questions.
 
-Utilisation typique :
+Typical usage:
 
     roster = load_roster("classe_6eH.csv")
     results = process_batch(["photo1.jpg", "photo2.jpg", ...], roster,
                              output_dir="/mnt/user-data/outputs/corrections")
 
-`results` contient, pour chaque ÉLÈVE (pas chaque photo), soit le nom
-associé et toutes ses réponses, soit un signalement (numéro inconnu,
-feuille douteuse, face manquante) accompagné d'une image recadrée de la
-zone Nom/Classe pour vérification manuelle.
-"""
+`results` contains, for each STUDENT (not each photo), either the
+matched name and all their answers, or a flag (unknown number, doubtful
+sheet, missing side) together with a cropped image of the Name/Class
+area for manual review. Status values and format_batch_report()'s
+output text are intentionally left in French (see qcm_app.py's
+status_label() for the translated display layer)."""
 import csv
 import os
 import sys
@@ -27,8 +30,8 @@ from detect_modular import analyse, LowResolutionError
 
 
 def load_roster(csv_path):
-    """Lit un CSV avec au moins les colonnes 'numero' et 'nom' (et
-    optionnellement 'classe'). Retourne {numero (int): {"nom":..., "classe":...}}."""
+    """Reads a CSV with at least the 'numero' and 'nom' columns (and
+    optionally 'classe'). Returns {numero (int): {"nom":..., "classe":...}}."""
     roster = {}
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter=";")
@@ -42,25 +45,25 @@ def load_roster(csv_path):
 
 
 def process_batch(image_paths, roster, output_dir, adaptive=True):
-    """Traite une liste de photos (une image = une FACE d'une feuille —
-    une feuille simple face n'a qu'une image, une feuille recto-verso en
-    a deux). Regroupe automatiquement les faces d'une même feuille (même
-    numéro décodé) en un seul résultat par élève, puis l'associe via le
-    tableau. Remonte les cas problématiques :
-    - numéro décodé absent du tableau -> image de la zone Nom/Classe
-      sauvegardée pour vérification manuelle
-    - feuille recto-verso dont une face n'a pas été fournie/lue -> signalée
-    - feuille sans séparation nette sur au moins une face -> signalée
-    - erreur de lecture (repères, résolution) -> signalée avec le chemin
-      de la photo d'origine
+    """Processes a list of photos (one image = one SIDE of a sheet -- a
+    single-sided sheet has only one image, a double-sided one has two).
+    Automatically groups the sides of the same sheet (same decoded
+    number) into a single result per student, then matches it via the
+    table. Reports problem cases:
+    - decoded number absent from the table -> Name/Class area image
+      saved for manual review
+    - double-sided sheet with a side not provided/read -> flagged
+    - sheet with no clean separation on at least one side -> flagged
+    - reading error (markers, resolution) -> flagged with the original
+      photo's path
 
-    Retourne une liste de dicts, un par ÉLÈVE/feuille (pas par photo).
+    Returns a list of dicts, one per STUDENT/sheet (not per photo).
     """
     os.makedirs(output_dir, exist_ok=True)
     unmatched_dir = os.path.join(output_dir, "a_verifier")
     os.makedirs(unmatched_dir, exist_ok=True)
 
-    # --- Passe 1 : lire chaque photo individuellement ---
+    # --- Pass 1: read each photo individually ---
     read_errors = []
     by_sheet = {}
     for path in image_paths:
@@ -72,7 +75,7 @@ def process_batch(image_paths, roster, output_dir, adaptive=True):
         num = result["sheet_number"]
         by_sheet.setdefault(num, []).append({"source": path, "result": result})
 
-    # --- Passe 2 : fusionner les faces d'une même feuille, puis associer ---
+    # --- Pass 2: merge the sides of the same sheet, then match ---
     report = []
     for num, entries in by_sheet.items():
         first = entries[0]["result"]

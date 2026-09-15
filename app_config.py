@@ -1,13 +1,15 @@
-"""Petite persistance locale (dossier de sortie choisi, dernier corrigé,
-dernier CSV classe, classes enregistrées en mémoire...) pour éviter à
-l'utilisatrice de ressaisir la même chose à chaque lancement.
+"""Small local persistence layer (chosen output folder, last answer key,
+last class CSV, classes saved to memory...) so the teacher doesn't have
+to re-enter the same things every time she launches the app.
 
-Tout est stocké dans un dossier "Données" À CÔTÉ DE L'EXÉCUTABLE (pas
-dans %APPDATA%/Documents) : l'application est pensée pour tourner depuis
-une clé USB, sur des ordinateurs différents d'une fois sur l'autre — ses
-données (classes enregistrées, réglages, PDF générés, résultats de
-correction) doivent donc voyager AVEC elle sur la clé plutôt que rester
-éparpillées sur le premier ordinateur utilisé."""
+Everything is stored in a "Données" folder NEXT TO THE EXECUTABLE (not
+in %APPDATA%/Documents): the application is meant to run from a USB
+drive, on different computers from one use to the next -- its data
+(saved classes, settings, generated PDFs, grading results) must
+therefore travel WITH it on the drive rather than stay scattered on
+whichever computer was used first. "Données" (French for "Data") is
+kept as the actual on-disk folder name across languages, for backward
+compatibility with folders created by earlier versions of the app."""
 import json
 import os
 import sys
@@ -16,23 +18,22 @@ DATA_DIR_NAME = "Données"
 
 
 def get_base_dir():
-    """Dossier de référence : celui de l'exécutable si l'application est
-    empaquetée (PyInstaller, sys.frozen), sinon celui de ce fichier
-    source (lancement depuis Python directement)."""
+    """Reference folder: the executable's if the application is
+    packaged (PyInstaller, sys.frozen), otherwise this source file's
+    (running directly from Python)."""
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_config_dir():
-    """Dossier "Données" à côté de l'exécutable. Si ce dossier n'est pas
-    inscriptible (clé USB protégée en écriture, dossier en lecture
-    seule...), on se rabat sur le dossier Documents de l'utilisateur
-    plutôt que de planter."""
+    """"Données" folder next to the executable. If this folder isn't
+    writable (write-protected USB drive, read-only folder...), falls
+    back to the user's Documents folder rather than crashing."""
     d = os.path.join(get_base_dir(), DATA_DIR_NAME)
     try:
         os.makedirs(d, exist_ok=True)
-        test_file = os.path.join(d, ".ecriture_test")
+        test_file = os.path.join(d, ".write_test")
         with open(test_file, "w") as f:
             f.write("")
         os.remove(test_file)

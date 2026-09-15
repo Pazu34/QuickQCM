@@ -1,10 +1,12 @@
-"""Stockage persistant des tableaux de correspondance numero/nom/classe
-("classes enregistrées en mémoire"), dans un fichier JSON du dossier de
-configuration de l'application (%APPDATA%\\QCM Scanner\\classes.json).
+"""Persistent storage for numero/nom/classe correspondence tables
+("classes saved to memory"), in a JSON file in the application's config
+folder (see app_config.get_config_dir() -- a "Données" folder next to
+the executable, portable-USB friendly).
 
-Indépendant des 4 modules déjà testés : ne touche ni à la génération ni
-à la lecture, seulement à la persistance des rosters entre deux
-lancements de l'application."""
+Independent from the 4 already-tested modules: touches neither
+generation nor reading, only roster persistence between two runs of the
+application. Field names nom/classe/numero ("name"/"class"/"number")
+are kept as-is to match roster_match.py's data model."""
 import json
 import os
 
