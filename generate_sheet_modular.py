@@ -64,6 +64,65 @@ SQRT2 = 2 ** 0.5
 MAX_QUESTIONS = 64  # beyond that, no practical use -> fits on 6 bits (1-64)
 MAX_SCALE = 2.0      # maximum answer-sheet size: A4 (= A6 x2)
 
+# --- Labels printed ON the sheet itself (Nom/Classe/Exemple/Recto-Verso),
+# separate from the application's own interface translations (see
+# translations.py): a teacher can print sheets in a different language
+# than the one they use the app in, though qcm_app.py normally passes
+# its own current interface language here so both match by default.
+# Purely cosmetic text -- reading (detect_modular.py) never looks at it,
+# only at the fixed geometry of the identity zone and bubble positions,
+# so any language here is always safe to read back.
+SHEET_LABELS = {
+    "fr": {
+        "nom": "Nom :",
+        "classe": "Classe :",
+        "exemple": "Exemple :",
+        "reponse_sing": "réponse",
+        "reponse_plur": "réponses",
+        "et": " et ",
+        "recto": "Recto (1/2)",
+        "verso": "Verso (2/2)",
+        "numero_prefix": "n° ",
+    },
+    "en": {
+        "nom": "Name:",
+        "classe": "Class:",
+        "exemple": "Example:",
+        "reponse_sing": "answer",
+        "reponse_plur": "answers",
+        "et": " and ",
+        "recto": "Front (1/2)",
+        "verso": "Back (2/2)",
+        "numero_prefix": "No. ",
+    },
+    "de": {
+        "nom": "Name:",
+        "classe": "Klasse:",
+        "exemple": "Beispiel:",
+        "reponse_sing": "Antwort",
+        "reponse_plur": "Antworten",
+        "et": " und ",
+        "recto": "Vorderseite (1/2)",
+        "verso": "Rückseite (2/2)",
+        "numero_prefix": "Nr. ",
+    },
+    "es": {
+        "nom": "Nombre:",
+        "classe": "Clase:",
+        "exemple": "Ejemplo:",
+        "reponse_sing": "respuesta",
+        "reponse_plur": "respuestas",
+        "et": " y ",
+        "recto": "Anverso (1/2)",
+        "verso": "Reverso (2/2)",
+        "numero_prefix": "n.º ",
+    },
+}
+
+
+def sheet_labels(lang):
+    return SHEET_LABELS.get(lang, SHEET_LABELS["fr"])
+
 
 def needs_recto_verso(cfg):
     """True if the number of questions doesn't fit on a single side at
@@ -155,6 +214,7 @@ class SheetConfig:
     tiles_cols: int = 2
     page_w: float = 210.0       # output page (mm); A4 by default
     page_h: float = 297.0
+    lang: str = "fr"            # language of the text PRINTED on the sheet (see SHEET_LABELS)
 
     @property
     def choices(self):
@@ -378,7 +438,7 @@ def draw_config_barcode(c, ox, oy, s, cfg, side=0):
     c.setFillColorRGB(0, 0, 0)
 
 
-def draw_corner_marks(c, ox, oy, s, sheet_number=None):
+def draw_corner_marks(c, ox, oy, s, sheet_number=None, number_prefix="n\u00b0 "):
     size = MARK_SIZE * s * MM
     margin = MARK_MARGIN * s * MM
     small = SMALL_MARK_SIZE * s * MM
@@ -390,7 +450,7 @@ def draw_corner_marks(c, ox, oy, s, sheet_number=None):
     mark_y = oy + h - margin - size
     if sheet_number is not None:
         draw_id_pattern(c, mark_x, mark_y, size, s, sheet_number)
-        label = f"n\u00b0 {sheet_number}"
+        label = f"{number_prefix}{sheet_number}"
         font_size = 8.0 * s
         while c.stringWidth(label, "Helvetica-Bold", font_size) > size and font_size > 3:
             font_size -= 0.3
@@ -497,6 +557,22 @@ def draw_bubble_row(c, ox, oy, s, row_y_local, label, cfg, filled_indices=None,
     return last_cx + bd
 
 
+def draw_shrinking_label(c, ox, x0_local, max_w_local, y_id, s, text, base_size=8.0):
+    """Draws a left-aligned label (e.g. the "Nom :"/"Classe :" prompts),
+    shrinking the font if needed so it never overflows into the
+    following field -- translated labels (see SHEET_LABELS) aren't all
+    the same length as the French originals this layout was tuned for
+    (e.g. Spanish "Nombre:" vs French "Nom :"), so this guards against
+    overlap regardless of language."""
+    size = base_size * s
+    max_w = max_w_local * s * MM
+    while c.stringWidth(text, "Helvetica", size) > max_w and size > 4:
+        size -= 0.3
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", size)
+    c.drawString(ox + x0_local * s * MM, y_id, text)
+
+
 def draw_identity_field(c, ox, y_id, s, x0_local, x1_local, text=None):
     """Draws the identity field (Nom/"Name" or Classe/"Class") between
     local x0_local/x1_local abscissas (mm, native): either a line to
@@ -519,7 +595,8 @@ def draw_identity_field(c, ox, y_id, s, x0_local, x1_local, text=None):
 
 def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None):
     s = cfg.scale
-    draw_corner_marks(c, ox, oy, s, sheet_number=sheet_number)
+    labels = sheet_labels(cfg.lang)
+    draw_corner_marks(c, ox, oy, s, sheet_number=sheet_number, number_prefix=labels["numero_prefix"])
     draw_config_barcode(c, ox, oy, s, cfg, side=side)
 
     c.setFillColorRGB(0, 0, 0)
@@ -531,14 +608,10 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
     # --- Identity --- (name/class printed directly if provided, else a
     # line to fill in by hand, see draw_identity_field)
     y_id = oy + IDENTITY_Y * s * MM
-    c.setFillColorRGB(0, 0, 0)
-    c.setFont("Helvetica", 8 * s)
-    c.drawString(ox + 6 * s * MM, y_id, "Nom :")
+    draw_shrinking_label(c, ox, 6, 9, y_id, s, labels["nom"])
     if cfg.show_classe:
         draw_identity_field(c, ox, y_id, s, 16, 63, nom)
-        c.setFillColorRGB(0, 0, 0)
-        c.setFont("Helvetica", 8 * s)
-        c.drawString(ox + 66 * s * MM, y_id, "Classe :")
+        draw_shrinking_label(c, ox, 66, 12, y_id, s, labels["classe"])
         draw_identity_field(c, ox, y_id, s, 79, 90, classe)
     else:
         draw_identity_field(c, ox, y_id, s, 16, 90, nom)
@@ -551,13 +624,13 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
     # --- Example --- (bubbles the same size as the questions -> cfg_side)
     example_filled = [1, 3] if cfg.n_choices >= 4 else [cfg.n_choices - 1]
     ex_letters = [cfg.choices[i] for i in example_filled]
-    right_edge = draw_bubble_row(c, ox, oy, s, EXAMPLE_Y, "Exemple :", cfg_side,
+    right_edge = draw_bubble_row(c, ox, oy, s, EXAMPLE_Y, labels["exemple"], cfg_side,
                                   filled_indices=example_filled,
                                   label_font_size=7, center_shift_mm=-3)
     caption_x = right_edge + 2 * s * MM
     max_w = ox + (NATIVE_W - 2) * s * MM - caption_x
-    prefix = f"= r\u00e9ponse{'s' if len(ex_letters) > 1 else ''}"
-    letters_part = ' et '.join(ex_letters)
+    prefix = f"= {labels['reponse_plur'] if len(ex_letters) > 1 else labels['reponse_sing']}"
+    letters_part = labels["et"].join(ex_letters)
     full_text = f"{prefix} {letters_part}"
 
     font_sz = 7 * text_scale(cfg_side)
@@ -614,7 +687,7 @@ def draw_sheet(c, ox, oy, cfg, sheet_number=None, side=0, nom=None, classe=None)
     if needs_recto_verso(cfg):
         c.setFont("Helvetica-Oblique", 6.5 * s)
         c.setFillColorRGB(0.4, 0.4, 0.4)
-        side_label = "Recto (1/2)" if side == 0 else "Verso (2/2)"
+        side_label = labels["recto"] if side == 0 else labels["verso"]
         c.drawCentredString(ox + (NATIVE_W * s / 2) * MM, oy + 3 * s * MM, side_label)
         c.setFillColorRGB(0, 0, 0)
 

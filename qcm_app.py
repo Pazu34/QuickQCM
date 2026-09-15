@@ -605,6 +605,7 @@ class GenerateTab(ttk.Frame):
             scale=preset["scale"],
             tiles_rows=preset["tiles_rows"],
             tiles_cols=preset["tiles_cols"],
+            lang=translations.get_language(),
         )
 
     def _save_settings(self):
