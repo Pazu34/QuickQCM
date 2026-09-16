@@ -2337,8 +2337,12 @@ class DataTab(ttk.Frame):
             self.corr_tree.column(col, width=width, anchor="w")
         self.corr_tree.pack(fill="both", expand=True)
         self.corr_tree.bind("<Double-1>", lambda e: self._load_selected_correction())
-        ttk.Button(corr_frame, text=tr("data_load_correction_btn"), command=self._load_selected_correction).pack(
-            anchor="w", pady=(6, 0))
+        corr_btn_row = ttk.Frame(corr_frame)
+        corr_btn_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(corr_btn_row, text=tr("data_load_correction_btn"), command=self._load_selected_correction).pack(
+            side="left")
+        ttk.Button(corr_btn_row, text=tr("data_delete_correction_btn"),
+                   command=self._delete_selected_correction).pack(side="left", padx=5)
 
     # -- Classes -----------------------------------------------------
     def _refresh_classes(self):
@@ -2415,6 +2419,17 @@ class DataTab(ttk.Frame):
             messagebox.showerror(APP_TITLE, tr("arch_report_missing"))
             return
         self.on_load_correction(report, classe, run_name)
+
+    def _delete_selected_correction(self):
+        classe = self.current_classe
+        sel = self.corr_tree.selection()
+        if not classe or not sel:
+            messagebox.showwarning(APP_TITLE, tr("data_choose_correction_first"))
+            return
+        run_name = sel[0]
+        if messagebox.askyesno(APP_TITLE, tr("data_confirm_delete_correction", name=run_name)):
+            class_archive.delete_correction(classe, run_name)
+            self._refresh_corrections()
 
 
 # ---------------------------------------------------------------------

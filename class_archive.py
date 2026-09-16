@@ -116,6 +116,15 @@ def delete_class(name):
         shutil.rmtree(path)
 
 
+def delete_correction(classe_name, run_name):
+    """Permanently deletes ONE archived correction (its resultats.csv,
+    report.json, and any saved copies) for this class, leaving the rest
+    of the class's archive (roster, other corrections) untouched."""
+    path = os.path.join(_class_dir_path(classe_name), CORRECTIONS_DIRNAME, _sanitize(run_name))
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+
+
 _LEGACY_STORE_FILENAME = "classes.json"
 
 

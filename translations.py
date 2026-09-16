@@ -330,7 +330,10 @@ TRANSLATIONS = {
         "data_col_date": "Date",
         "data_col_copies": "Copies",
         "data_col_average": "Moyenne",
-        "data_load_correction_btn": "Charger dans l'onglet Scanner / Corriger",
+        "data_load_correction_btn": "Voir cette correction (dans l'onglet Scanner)",
+        "data_delete_correction_btn": "Supprimer cette correction",
+        "data_confirm_delete_correction": ("Supprimer définitivement la correction « {name} » (résultats et "
+                                            "copies archivées) ?"),
         "data_choose_correction_first": "Sélectionne une correction dans la liste.",
         "data_class_summary": ("{n_students} élève(s) enregistré(s) · {n_corrections} correction(s) archivée(s) "
                                 "· moyenne générale : {overall}"),
@@ -609,7 +612,10 @@ TRANSLATIONS = {
         "data_col_date": "Date",
         "data_col_copies": "Sheets",
         "data_col_average": "Average",
-        "data_load_correction_btn": "Load into the Scan / Grade tab",
+        "data_load_correction_btn": "View this correction (in the Scan tab)",
+        "data_delete_correction_btn": "Delete this correction",
+        "data_confirm_delete_correction": ("Permanently delete the correction «{name}» (archived "
+                                            "results and copies)?"),
         "data_choose_correction_first": "Choose a correction from the list.",
         "data_class_summary": ("{n_students} student(s) saved · {n_corrections} correction(s) archived "
                                 "· overall average: {overall}"),
@@ -887,7 +893,10 @@ TRANSLATIONS = {
         "data_col_date": "Datum",
         "data_col_copies": "Bögen",
         "data_col_average": "Durchschnitt",
-        "data_load_correction_btn": "In die Registerkarte Scannen / Korrigieren laden",
+        "data_load_correction_btn": "Diese Korrektur ansehen (in der Registerkarte Scannen)",
+        "data_delete_correction_btn": "Diese Korrektur löschen",
+        "data_confirm_delete_correction": ("Die Korrektur „{name}“ endgültig löschen (archivierte Ergebnisse "
+                                            "und Kopien)?"),
         "data_choose_correction_first": "Wähle eine Korrektur aus der Liste.",
         "data_class_summary": ("{n_students} Schüler gespeichert · {n_corrections} Korrektur(en) "
                                 "archiviert · Gesamtdurchschnitt: {overall}"),
@@ -1166,7 +1175,10 @@ TRANSLATIONS = {
         "data_col_date": "Fecha",
         "data_col_copies": "Hojas",
         "data_col_average": "Media",
-        "data_load_correction_btn": "Cargar en la pestaña Escanear / Corregir",
+        "data_load_correction_btn": "Ver esta corrección (en la pestaña Escanear)",
+        "data_delete_correction_btn": "Eliminar esta corrección",
+        "data_confirm_delete_correction": ("¿Eliminar definitivamente la corrección «{name}» (resultados y "
+                                            "copias archivadas)?"),
         "data_choose_correction_first": "Elige una corrección de la lista.",
         "data_class_summary": ("{n_students} alumno(s) guardado(s) · {n_corrections} corrección/es "
                                 "archivada(s) · media general: {overall}"),
