@@ -622,6 +622,8 @@ class GenerateTab(ttk.Frame):
         ttk.Label(classe_row, text=tr("gen_manual_classe_label")).pack(side="left")
         self.manual_classe_var = tk.StringVar(value=s.get("last_classe", ""))
         ttk.Entry(classe_row, textvariable=self.manual_classe_var, width=15).pack(side="left", padx=5)
+        ttk.Button(classe_row, text=tr("gen_save_class_btn"), command=self._save_manual_class_to_memory).pack(
+            side="left", padx=5)
 
         self.csv_frame = ttk.Frame(roster_frame)
         csv_row = ttk.Frame(self.csv_frame)
@@ -744,7 +746,19 @@ class GenerateTab(ttk.Frame):
                              on_apply=on_apply)
 
     def _save_class_to_memory(self):
-        roster = self.loaded_csv_roster
+        self._save_roster_to_memory(self.loaded_csv_roster)
+
+    def _save_manual_class_to_memory(self):
+        raw = self.names_text.get("1.0", "end").splitlines()
+        names = [n.strip() for n in raw if n.strip()]
+        if not names:
+            messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
+            return
+        classe_for_all = self.manual_classe_var.get().strip()
+        roster = {i + 1: {"nom": name, "classe": classe_for_all} for i, name in enumerate(names)}
+        self._save_roster_to_memory(roster)
+
+    def _save_roster_to_memory(self, roster):
         if not roster:
             messagebox.showwarning(APP_TITLE, tr("gen_roster_load_warn"))
             return
@@ -2297,37 +2311,73 @@ class ScanTab(ttk.Frame):
 # (class_archive.py) -- roster, and the history of past corrections.
 # ---------------------------------------------------------------------
 class DataTab(ttk.Frame):
+    """Trois modes, choisis par les boutons radio du haut : les listes
+    d'élèves (classes) enregistrées, les corrections archivées, et les
+    corrigés/barèmes de QCM réutilisables (voir answer_key_store.py). Les
+    deux premiers modes partagent le sélecteur de classe en haut de
+    l'onglet ; le troisième n'en a pas besoin (les corrigés ne sont pas
+    liés à une classe en particulier)."""
+
     def __init__(self, master, on_load_correction):
         super().__init__(master, padding=12)
         self.on_load_correction = on_load_correction
         self.current_classe = None
+        self.mode_var = tk.StringVar(value="classes")
         self._build_ui()
         self._refresh_classes()
+        self._refresh_keys()
 
     def _build_ui(self):
-        top = ttk.Frame(self)
-        top.pack(fill="x")
-        ttk.Label(top, text=tr("data_class_label")).pack(side="left")
+        mode_frame = ttk.Frame(self)
+        mode_frame.pack(fill="x", pady=(0, 8))
+        modes = [
+            ("classes", tr("data_mode_classes")),
+            ("corrections", tr("data_mode_corrections")),
+            ("keys", tr("data_mode_keys")),
+        ]
+        for value, label in modes:
+            ttk.Radiobutton(mode_frame, text=label, variable=self.mode_var, value=value,
+                            command=self._on_mode_change).pack(side="left", padx=(0, 15))
+
+        self.classe_row = ttk.Frame(self)
+        ttk.Label(self.classe_row, text=tr("data_class_label")).pack(side="left")
         self.classe_var = tk.StringVar()
-        self.classe_combo = ttk.Combobox(top, textvariable=self.classe_var, state="readonly", width=25)
+        self.classe_combo = ttk.Combobox(self.classe_row, textvariable=self.classe_var, state="readonly", width=25)
         self.classe_combo.pack(side="left", padx=5)
         self.classe_combo.bind("<<ComboboxSelected>>", lambda e: self._load_classe())
-        ttk.Button(top, text=tr("btn_refresh"), command=self._refresh_classes).pack(side="left", padx=5)
-        self.open_folder_btn = ttk.Button(top, text=tr("scan_open_class_folder"),
+        ttk.Button(self.classe_row, text=tr("btn_refresh"), command=self._refresh_classes).pack(side="left", padx=5)
+        self.open_folder_btn = ttk.Button(self.classe_row, text=tr("scan_open_class_folder"),
                                            command=self._open_folder, state="disabled")
         self.open_folder_btn.pack(side="left", padx=5)
 
         self.summary_label = ttk.Label(self, text="", foreground="#333333", wraplength=760, justify="left")
-        self.summary_label.pack(fill="x", pady=(8, 8))
 
-        roster_frame = ttk.LabelFrame(self, text=tr("data_roster_group"), padding=10)
-        roster_frame.pack(fill="both", expand=False, pady=(0, 8))
+        # --- Mode : listes d'élèves (classes) ---
+        self.classes_mode_frame = ttk.Frame(self)
+
+        new_class_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_new_class_group"), padding=10)
+        new_class_frame.pack(fill="x", pady=(0, 8))
+        ttk.Label(new_class_frame, text=tr("data_new_class_names_hint")).pack(anchor="w")
+        self.new_class_names_text = tk.Text(new_class_frame, height=6, width=45)
+        self.new_class_names_text.pack(fill="x", pady=3)
+        new_class_row = ttk.Frame(new_class_frame)
+        new_class_row.pack(fill="x")
+        ttk.Label(new_class_row, text=tr("data_new_class_classe_label")).pack(side="left")
+        self.new_class_classe_var = tk.StringVar()
+        ttk.Entry(new_class_row, textvariable=self.new_class_classe_var, width=15).pack(side="left", padx=5)
+        ttk.Button(new_class_row, text=tr("data_new_class_btn"), command=self._create_class).pack(
+            side="left", padx=5)
+
+        roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
+        roster_frame.pack(fill="both", expand=True)
         self.roster_editor = RosterTableEditor(roster_frame, height=180)
         self.roster_editor.pack(fill="both", expand=True)
         ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_roster).pack(
             anchor="w", pady=(6, 0))
 
-        corr_frame = ttk.LabelFrame(self, text=tr("data_corrections_group"), padding=10)
+        # --- Mode : corrections enregistrées ---
+        self.corrections_mode_frame = ttk.Frame(self)
+        corr_frame = ttk.LabelFrame(self.corrections_mode_frame, text=tr("data_corrections_group"), padding=10)
         corr_frame.pack(fill="both", expand=True)
         columns = ("nom", "date", "eleves", "moyenne")
         self.corr_tree = ttk.Treeview(corr_frame, columns=columns, show="headings", height=8)
@@ -2344,10 +2394,54 @@ class DataTab(ttk.Frame):
         ttk.Button(corr_btn_row, text=tr("data_delete_correction_btn"),
                    command=self._delete_selected_correction).pack(side="left", padx=5)
 
+        # --- Mode : corrigés et barèmes de QCM ---
+        self.keys_mode_frame = ttk.Frame(self)
+        keys_frame = ttk.LabelFrame(self.keys_mode_frame, text=tr("data_keys_group"), padding=10)
+        keys_frame.pack(fill="both", expand=True)
+        key_columns = ("nom", "questions", "points")
+        self.keys_tree = ttk.Treeview(keys_frame, columns=key_columns, show="headings", height=10)
+        for col, label, width in [("nom", tr("data_col_key_name"), 260),
+                                   ("questions", tr("data_col_key_questions"), 140),
+                                   ("points", tr("data_col_key_points"), 140)]:
+            self.keys_tree.heading(col, text=label)
+            self.keys_tree.column(col, width=width, anchor="w")
+        self.keys_tree.pack(fill="both", expand=True)
+        self.keys_tree.bind("<Double-1>", lambda e: self._open_selected_key())
+        keys_btn_row = ttk.Frame(keys_frame)
+        keys_btn_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(keys_btn_row, text=tr("data_keys_new_btn"), command=self._new_key).pack(side="left")
+        ttk.Button(keys_btn_row, text=tr("data_keys_open_btn"), command=self._open_selected_key).pack(
+            side="left", padx=5)
+        ttk.Button(keys_btn_row, text=tr("data_keys_rename_btn"), command=self._rename_selected_key).pack(
+            side="left", padx=5)
+        ttk.Button(keys_btn_row, text=tr("data_keys_delete_btn"), command=self._delete_selected_key).pack(
+            side="left", padx=5)
+
+        self._on_mode_change()
+
+    def _on_mode_change(self):
+        mode = self.mode_var.get()
+        self.classe_row.pack_forget()
+        self.summary_label.pack_forget()
+        self.classes_mode_frame.pack_forget()
+        self.corrections_mode_frame.pack_forget()
+        self.keys_mode_frame.pack_forget()
+        if mode == "classes":
+            self.classe_row.pack(fill="x")
+            self.summary_label.pack(fill="x", pady=(8, 8))
+            self.classes_mode_frame.pack(fill="both", expand=True)
+        elif mode == "corrections":
+            self.classe_row.pack(fill="x")
+            self.summary_label.pack(fill="x", pady=(8, 8))
+            self.corrections_mode_frame.pack(fill="both", expand=True)
+        else:
+            self.keys_mode_frame.pack(fill="both", expand=True)
+            self._refresh_keys()
+
     # -- Classes -----------------------------------------------------
-    def _refresh_classes(self):
+    def _refresh_classes(self, select=None):
         classes = class_archive.list_classes()
-        selected = self.classe_var.get()
+        selected = select or self.classe_var.get()
         self.classe_combo["values"] = classes
         if not classes:
             self.classe_var.set("")
@@ -2357,9 +2451,31 @@ class DataTab(ttk.Frame):
             self.open_folder_btn.config(state="disabled")
             self.summary_label.config(text=tr("data_no_class"))
             return
-        if selected not in classes:
+        if selected in classes:
+            self.classe_combo.set(selected)
+        else:
             self.classe_combo.current(0)
         self._load_classe()
+
+    def _create_class(self):
+        raw = self.new_class_names_text.get("1.0", "end").splitlines()
+        names = [n.strip() for n in raw if n.strip()]
+        if not names:
+            messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
+            return
+        classe = self.new_class_classe_var.get().strip()
+        if not classe:
+            messagebox.showwarning(APP_TITLE, tr("data_new_class_name_required"))
+            return
+        if classe in class_archive.list_classes():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=classe)):
+                return
+        roster = {i + 1: {"nom": name, "classe": classe} for i, name in enumerate(names)}
+        class_archive.save_roster(classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=classe, n=len(roster)))
+        self.new_class_names_text.delete("1.0", "end")
+        self.new_class_classe_var.set("")
+        self._refresh_classes(select=classe)
 
     def _load_classe(self):
         classe = self.classe_var.get()
@@ -2430,6 +2546,68 @@ class DataTab(ttk.Frame):
         if messagebox.askyesno(APP_TITLE, tr("data_confirm_delete_correction", name=run_name)):
             class_archive.delete_correction(classe, run_name)
             self._refresh_corrections()
+
+    # -- Corrigés et barèmes de QCM ------------------------------------
+    def _refresh_keys(self):
+        self.keys_tree.delete(*self.keys_tree.get_children())
+        for name in answer_key_store.list_keys():
+            key = answer_key_store.load_key(name) or {"questions": {}}
+            questions = key.get("questions", {})
+            total_points = sum(info.get("points", 0) for info in questions.values())
+            self.keys_tree.insert("", "end", iid=name, values=(name, len(questions), _fmt_points(total_points)))
+
+    def _selected_key_name(self):
+        sel = self.keys_tree.selection()
+        if not sel:
+            messagebox.showwarning(APP_TITLE, tr("data_choose_key_first"))
+            return None
+        return sel[0]
+
+    def _new_key(self):
+        settings = app_config.load_settings()
+        n_q = settings.get("n_questions", 12)
+        n_c = settings.get("n_choices", 5)
+        dialog = AnswerKeyDialog(self, n_q, n_c)
+        self.wait_window(dialog)
+        self._refresh_keys()
+
+    def _open_selected_key(self):
+        name = self._selected_key_name()
+        if not name:
+            return
+        key = answer_key_store.load_key(name)
+        if key is None:
+            messagebox.showerror(APP_TITLE, tr("arch_report_missing"))
+            return
+        questions = key.get("questions", {})
+        n_q = max(questions.keys(), default=12)
+        n_c = max((len(info.get("correct", [])) for info in questions.values()), default=3)
+        n_c = max(3, min(6, n_c))
+        dialog = AnswerKeyDialog(self, n_q, n_c, existing_key=key, existing_name=name)
+        self.wait_window(dialog)
+        self._refresh_keys()
+
+    def _rename_selected_key(self):
+        name = self._selected_key_name()
+        if not name:
+            return
+        new_name = simpledialog.askstring(APP_TITLE, tr("ak_new_name_for", name=name), initialvalue=name,
+                                           parent=self)
+        if not new_name or new_name.strip() == name:
+            return
+        new_name = new_name.strip()
+        if not answer_key_store.rename_key(name, new_name):
+            messagebox.showerror(APP_TITLE, tr("ak_rename_target_exists", name=new_name))
+            return
+        self._refresh_keys()
+
+    def _delete_selected_key(self):
+        name = self._selected_key_name()
+        if not name:
+            return
+        if messagebox.askyesno(APP_TITLE, tr("ak_confirm_delete", name=name)):
+            answer_key_store.delete_key(name)
+            self._refresh_keys()
 
 
 # ---------------------------------------------------------------------
