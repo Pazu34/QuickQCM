@@ -613,6 +613,13 @@ class GenerateTab(ttk.Frame):
                 ttk.Button(mode_row, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
                     side="left", padx=10)
 
+        # Toujours visible, quel que soit le mode choisi ci-dessus -- charger
+        # une classe enregistree en memoire bascule automatiquement sur le
+        # mode "csv" (une classe chargee est un tableau numero/nom/classe
+        # complet, traite comme le serait un CSV).
+        ttk.Button(roster_frame, text=tr("gen_roster_table_btn"), command=self._open_roster_manager).pack(
+            anchor="w", pady=(4, 8))
+
         self.manual_frame = ttk.Frame(roster_frame)
         ttk.Label(self.manual_frame, text=tr("gen_manual_names_hint")).pack(anchor="w")
         self.names_text = tk.Text(self.manual_frame, height=8, width=45)
@@ -632,10 +639,8 @@ class GenerateTab(ttk.Frame):
         ttk.Button(csv_row, text=tr("btn_browse"), command=self._browse_csv).pack(side="left", padx=5)
         csv_row2 = ttk.Frame(self.csv_frame)
         csv_row2.pack(fill="x", pady=(0, 3))
-        ttk.Button(csv_row2, text=tr("gen_roster_table_btn"),
-                   command=self._open_roster_manager).pack(side="left")
         ttk.Button(csv_row2, text=tr("gen_save_class_btn"),
-                   command=self._save_class_to_memory).pack(side="left", padx=5)
+                   command=self._save_class_to_memory).pack(side="left")
         self.csv_info_label = ttk.Label(self.csv_frame, text="", foreground="#555555")
         self.csv_info_label.pack(anchor="w")
 
