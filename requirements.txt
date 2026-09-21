@@ -2,3 +2,4 @@ reportlab
 opencv-python
 numpy
 pymupdf
+Pillow

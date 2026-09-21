@@ -1,0 +1,42 @@
+name: Build Windows portable executable
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Sanity import check
+        run: python -c "import qcm_app"
+
+      - name: Build portable executable (onefile, no console)
+        run: >
+          pyinstaller --onefile --windowed --name QCM_Scanner
+          --hidden-import=PIL._tkinter_finder
+          qcm_app.py
+
+      - name: Assemble portable folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path portable | Out-Null
+          Copy-Item dist/QCM_Scanner.exe portable/
+          Copy-Item README.md portable/ -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QCM_Scanner_portable_windows
+          path: portable/
+          retention-days: 30
