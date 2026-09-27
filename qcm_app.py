@@ -1606,10 +1606,9 @@ class ManualEntryDialog(tk.Toplevel):
 
 class RosterTableEditor(ttk.Frame):
     """Reusable editable numero/nom/classe grid: add/remove rows, load a
-    roster dict into it, extract it back out with validation. Mirrors
-    RosterManagerDialog's table (kept separate rather than shared, so
-    editing this one can't regress that already-working dialog); used by
-    DataTab to let the teacher retouch/complete a class's saved roster."""
+    roster dict into it, extract it back out with validation. Used by
+    DataTab and ScanTab to let the teacher retouch/complete a class's
+    saved roster (see class_archive.py)."""
 
     def __init__(self, master, height=260):
         super().__init__(master)
@@ -1673,198 +1672,6 @@ class RosterTableEditor(ttk.Frame):
             seen.add(num)
             roster[num] = {"nom": nom, "classe": classe}
         return roster, errors
-
-
-# ---------------------------------------------------------------------
-# Single window to view/edit a numero/nom/classe table, and manage the
-# classes saved to memory -- backed by class_archive.py, the same
-# per-class archive used by DataTab, so a roster saved here is the same
-# one shown/editable there: load, save, rename, delete. Used from
-# ScanTab, to pick the roster a batch of scanned copies is matched
-# against (GenerateTab no longer needs it -- see gen_manage_classes_btn).
-# ---------------------------------------------------------------------
-class RosterManagerDialog(tk.Toplevel):
-    def __init__(self, master, initial_roster=None, initial_name=None, on_apply=None):
-        super().__init__(master)
-        self.on_apply = on_apply
-        self.rows = []
-        self.title(tr("rmd_title"))
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        self.geometry(f"{min(700, int(screen_w * 0.7))}x{min(800, int(screen_h * 0.85))}")
-
-        store_frame = ttk.LabelFrame(self, text=tr("rmd_store_group"), padding=10)
-        store_frame.pack(fill="x", padx=10, pady=(10, 6))
-        row1 = ttk.Frame(store_frame)
-        row1.pack(fill="x")
-        ttk.Label(row1, text=tr("rmd_class_label")).pack(side="left")
-        self.store_combo = ttk.Combobox(row1, state="readonly", width=25)
-        self.store_combo.pack(side="left", padx=5)
-        ttk.Button(row1, text=tr("btn_load"), command=self._on_load_from_store).pack(side="left", padx=3)
-        ttk.Button(row1, text=tr("btn_rename"), command=self._on_rename_in_store).pack(side="left", padx=3)
-        ttk.Button(row1, text=tr("btn_delete"), command=self._on_delete_from_store).pack(side="left", padx=3)
-        self._refresh_store_combo(select=initial_name)
-
-        save_row = ttk.Frame(store_frame)
-        save_row.pack(fill="x", pady=(8, 0))
-        ttk.Label(save_row, text=tr("rmd_save_as_label")).pack(side="left")
-        self.save_name_var = tk.StringVar(value=initial_name or "")
-        ttk.Entry(save_row, textvariable=self.save_name_var, width=20).pack(side="left", padx=5)
-        ttk.Button(save_row, text=tr("rmd_save_to_memory"), command=self._on_save_to_store).pack(side="left", padx=3)
-
-        table_frame = ttk.LabelFrame(self, text=tr("rmd_table_group"), padding=10)
-        table_frame.pack(fill="both", expand=True, padx=10, pady=6)
-        header = ttk.Frame(table_frame)
-        header.pack(fill="x")
-        ttk.Label(header, text=tr("col_number"), width=8).pack(side="left", padx=2)
-        ttk.Label(header, text=tr("col_name"), width=28).pack(side="left", padx=2)
-        ttk.Label(header, text=tr("col_class"), width=12).pack(side="left", padx=2)
-        self.scroll = ScrollableFrame(table_frame, height=380)
-        self.scroll.pack(fill="both", expand=True, pady=(4, 0))
-        ttk.Button(table_frame, text=tr("btn_add_row"), command=lambda: self._add_row()).pack(
-            anchor="w", pady=6)
-
-        if initial_roster:
-            self._load_roster_into_table(initial_roster)
-
-        action_row = ttk.Frame(self, padding=10)
-        action_row.pack(fill="x")
-        ttk.Button(action_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
-        if on_apply:
-            ttk.Button(action_row, text=tr("rmd_use_table"), command=self._on_use_click).pack(
-                side="right", padx=5)
-
-        self.transient(master)
-        self.grab_set()
-
-    # -- Table rows -------------------------------------------------
-    def _add_row(self, numero="", nom="", classe=""):
-        row_frame = ttk.Frame(self.scroll.inner)
-        row_frame.pack(fill="x", pady=1)
-        row_data = {"frame": row_frame}
-        row_data["numero"] = tk.StringVar(value=str(numero) if numero != "" else "")
-        row_data["nom"] = tk.StringVar(value=nom)
-        row_data["classe"] = tk.StringVar(value=classe)
-        ttk.Entry(row_frame, textvariable=row_data["numero"], width=8).pack(side="left", padx=2)
-        ttk.Entry(row_frame, textvariable=row_data["nom"], width=28).pack(side="left", padx=2)
-        ttk.Entry(row_frame, textvariable=row_data["classe"], width=12).pack(side="left", padx=2)
-        ttk.Button(row_frame, text="✕", width=3, command=lambda: self._delete_row(row_data)).pack(
-            side="left", padx=2)
-        self.rows.append(row_data)
-        return row_data
-
-    def _delete_row(self, row_data):
-        row_data["frame"].destroy()
-        self.rows.remove(row_data)
-
-    def _clear_rows(self):
-        for row in list(self.rows):
-            self._delete_row(row)
-
-    def _load_roster_into_table(self, roster):
-        self._clear_rows()
-        for num in sorted(roster.keys()):
-            info = roster[num]
-            self._add_row(num, info.get("nom", ""), info.get("classe", ""))
-
-    def _extract_roster(self):
-        roster, errors, seen = {}, [], set()
-        for row in self.rows:
-            nom = row["nom"].get().strip()
-            numero_str = row["numero"].get().strip()
-            classe = row["classe"].get().strip()
-            if not nom and not numero_str:
-                continue
-            if not numero_str.isdigit():
-                errors.append(tr("rmd_invalid_number_for", name=nom or tr("rmd_no_name")))
-                continue
-            num = int(numero_str)
-            if num in seen:
-                errors.append(tr("rmd_number_used_twice", num=num))
-                continue
-            if not nom:
-                errors.append(tr("rmd_name_missing_for", num=num))
-                continue
-            seen.add(num)
-            roster[num] = {"nom": nom, "classe": classe}
-        return roster, errors
-
-    # -- Classes saved to memory -----------------------------------------------
-    def _refresh_store_combo(self, select=None):
-        names = class_archive.list_classes()
-        self.store_combo.configure(values=names)
-        if select and select in names:
-            self.store_combo.set(select)
-        elif names and not self.store_combo.get():
-            pass
-
-    def _on_load_from_store(self):
-        name = self.store_combo.get()
-        if not name:
-            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
-            return
-        if self.rows and not messagebox.askyesno(APP_TITLE, tr("rmd_confirm_replace_table")):
-            return
-        roster = class_archive.load_roster(name)
-        self._load_roster_into_table(roster)
-        self.save_name_var.set(name)
-
-    def _on_rename_in_store(self):
-        name = self.store_combo.get()
-        if not name:
-            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
-            return
-        new_name = simpledialog.askstring(APP_TITLE, tr("rmd_new_name_for", name=name), initialvalue=name,
-                                           parent=self)
-        if not new_name or new_name.strip() == name:
-            return
-        new_name = new_name.strip()
-        if not class_archive.rename_class(name, new_name):
-            messagebox.showerror(APP_TITLE, tr("rmd_rename_target_exists", name=new_name))
-            return
-        self._refresh_store_combo(select=new_name)
-        if self.save_name_var.get() == name:
-            self.save_name_var.set(new_name)
-
-    def _on_delete_from_store(self):
-        name = self.store_combo.get()
-        if not name:
-            messagebox.showinfo(APP_TITLE, tr("rmd_choose_class_first"))
-            return
-        if messagebox.askyesno(APP_TITLE, tr("rmd_confirm_delete_class", name=name)):
-            class_archive.delete_class(name)
-            self._refresh_store_combo()
-
-    def _on_save_to_store(self):
-        roster, errors = self._extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        if not roster:
-            messagebox.showwarning(APP_TITLE, tr("rmd_table_empty"))
-            return
-        name = self.save_name_var.get().strip()
-        if not name:
-            messagebox.showwarning(APP_TITLE, tr("rmd_name_required"))
-            return
-        if name in class_archive.list_classes():
-            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
-                return
-        class_archive.save_roster(name, roster)
-        self._refresh_store_combo(select=name)
-        messagebox.showinfo(APP_TITLE, tr("rmd_class_saved", name=name, n=len(roster)))
-
-    # -- Applying to the calling tab -----------------------------
-    def _on_use_click(self):
-        roster, errors = self._extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        if not roster:
-            messagebox.showwarning(APP_TITLE, tr("rmd_table_empty"))
-            return
-        self.on_apply(roster, self.save_name_var.get().strip() or None)
-        self.destroy()
 
 
 class ArchiveBrowserDialog(tk.Toplevel):
@@ -1935,6 +1742,57 @@ class ArchiveBrowserDialog(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------
+# Popup for ScanTab's "Saisie manuelle" button: type a list of names and
+# a class name, saved to memory (same as DataTab/NewClassDialog) then
+# immediately usable to attribute names to sheet numbers for a batch of
+# scanned copies.
+# ---------------------------------------------------------------------
+class ManualClassDialog(tk.Toplevel):
+    def __init__(self, master, on_created):
+        super().__init__(master)
+        self.on_created = on_created
+        self.title(tr("data_new_class_dialog_title"))
+        self.transient(master)
+
+        frame = ttk.LabelFrame(self, text=tr("data_new_class_group"), padding=10)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        ttk.Label(frame, text=tr("data_new_class_names_hint")).pack(anchor="w")
+        self.names_text = tk.Text(frame, height=10, width=45)
+        self.names_text.pack(fill="both", expand=True, pady=3)
+        row = ttk.Frame(frame)
+        row.pack(fill="x")
+        ttk.Label(row, text=tr("data_new_class_classe_label")).pack(side="left")
+        self.classe_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self.classe_var, width=15).pack(side="left", padx=5)
+
+        btn_row = ttk.Frame(self, padding=10)
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("data_new_class_btn"), command=self._create).pack(side="right", padx=5)
+
+        self.grab_set()
+
+    def _create(self):
+        raw = self.names_text.get("1.0", "end").splitlines()
+        names = [n.strip() for n in raw if n.strip()]
+        if not names:
+            messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
+            return
+        classe = self.classe_var.get().strip()
+        if not classe:
+            messagebox.showwarning(APP_TITLE, tr("data_new_class_name_required"))
+            return
+        if classe in class_archive.list_classes():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=classe)):
+                return
+        roster = {i + 1: {"nom": name, "classe": classe} for i, name in enumerate(names)}
+        class_archive.save_roster(classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=classe, n=len(roster)))
+        self.on_created(classe)
+        self.destroy()
+
+
+# ---------------------------------------------------------------------
 # Tab 2: scanning and grading
 # ---------------------------------------------------------------------
 class ScanTab(ScrollableTab):
@@ -1942,6 +1800,7 @@ class ScanTab(ScrollableTab):
         super().__init__(master)
         self.settings = app_config.load_settings()
         self.roster = {}
+        self.scan_current_classe = None
         self.report = []
         self.answer_key = None
         self.answer_key_name = None
@@ -1959,25 +1818,35 @@ class ScanTab(ScrollableTab):
         top = ttk.Frame(self.body)
         top.pack(fill="x")
 
-        csv_frame = ttk.LabelFrame(top, text=tr("scan_csv_group"), padding=10)
-        csv_frame.pack(fill="x", pady=(0, 8))
-        self.csv_path_var = tk.StringVar(value=s.get("scan_csv_path", ""))
-        row = ttk.Frame(csv_frame)
-        row.pack(fill="x")
-        ttk.Entry(row, textvariable=self.csv_path_var, width=50).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text=tr("btn_browse"), command=self._browse_csv).pack(side="left", padx=5)
-        ttk.Button(row, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
+        # Meme modele que le mode "classes" de DataTab : un menu pour
+        # charger une classe enregistree en memoire, un tableau qui
+        # affiche/modifie ses eleves, et deux boutons pour en creer une
+        # nouvelle (saisie manuelle ou import CSV) -- utilisee ensuite pour
+        # attribuer un nom a chaque numero de fiche lors de la correction.
+        class_frame = ttk.LabelFrame(top, text=tr("scan_csv_group"), padding=10)
+        class_frame.pack(fill="x", pady=(0, 8))
+        classe_row = ttk.Frame(class_frame)
+        classe_row.pack(fill="x")
+        ttk.Label(classe_row, text=tr("data_class_label")).pack(side="left")
+        self.scan_classe_var = tk.StringVar()
+        self.scan_classe_combo = ttk.Combobox(classe_row, textvariable=self.scan_classe_var, state="readonly",
+                                               width=25)
+        self.scan_classe_combo.pack(side="left", padx=5)
+        self.scan_classe_combo.bind("<<ComboboxSelected>>", lambda e: self._load_scan_classe())
+        ttk.Button(classe_row, text=tr("btn_refresh"), command=self._refresh_scan_classes).pack(
             side="left", padx=5)
-        row1b = ttk.Frame(csv_frame)
-        row1b.pack(fill="x", pady=(4, 0))
-        ttk.Button(row1b, text=tr("gen_roster_table_btn"),
-                   command=self._open_roster_manager).pack(side="left")
-        ttk.Button(row1b, text=tr("gen_save_class_btn"),
-                   command=self._save_class_to_memory).pack(side="left", padx=5)
-        self.csv_info_label = ttk.Label(csv_frame, text="", foreground="#555555")
-        self.csv_info_label.pack(anchor="w", pady=(4, 0))
-        if self.csv_path_var.get() and os.path.exists(self.csv_path_var.get()):
-            self._load_csv(self.csv_path_var.get())
+        ttk.Button(classe_row, text=tr("scan_manual_entry_btn"), command=self._open_manual_class_dialog).pack(
+            side="left", padx=5)
+        ttk.Button(classe_row, text=tr("scan_load_csv_btn"), command=self._load_class_from_csv).pack(
+            side="left", padx=5)
+
+        roster_frame = ttk.LabelFrame(class_frame, text=tr("data_roster_group"), padding=10)
+        roster_frame.pack(fill="both", expand=True, pady=(8, 0))
+        self.scan_roster_editor = RosterTableEditor(roster_frame, height=180)
+        self.scan_roster_editor.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_scan_roster).pack(
+            anchor="w", pady=(6, 0))
+        self._refresh_scan_classes(select=s.get("scan_last_classe", ""))
 
         photos_frame = ttk.LabelFrame(top, text=tr("scan_photos_group"), padding=10)
         photos_frame.pack(fill="x", pady=(0, 8))
@@ -2080,13 +1949,48 @@ class ScanTab(ScrollableTab):
         self._populate_tree()
 
     # -- CSV --------------------------------------------------------
-    def _browse_csv(self):
+    def _refresh_scan_classes(self, select=None):
+        classes = class_archive.list_classes()
+        selected = select or self.scan_classe_var.get()
+        self.scan_classe_combo["values"] = classes
+        if not classes:
+            self.scan_classe_var.set("")
+            self.scan_current_classe = None
+            self.scan_roster_editor.clear_rows()
+            self.roster = {}
+            return
+        if selected in classes:
+            self.scan_classe_combo.set(selected)
+        else:
+            self.scan_classe_combo.current(0)
+        self._load_scan_classe()
+
+    def _load_scan_classe(self):
+        classe = self.scan_classe_var.get()
+        self.scan_current_classe = classe
+        roster = class_archive.load_roster(classe)
+        self.roster = roster
+        self.scan_roster_editor.load_roster(roster)
+
+    def _save_scan_roster(self):
+        if not self.scan_current_classe:
+            return
+        roster, errors = self.scan_roster_editor.extract_roster()
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        class_archive.save_roster(self.scan_current_classe, roster)
+        self.roster = roster
+        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+
+    def _open_manual_class_dialog(self):
+        ManualClassDialog(self, on_created=lambda classe: self._refresh_scan_classes(select=classe))
+
+    def _load_class_from_csv(self):
         path = filedialog.askopenfilename(title=tr("csv_choose_file"),
                                            filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
-        if path:
-            self._load_csv(path)
-
-    def _load_csv(self, path):
+        if not path:
+            return
         try:
             roster, use_path, message = smart_load_roster_with_export(path)
         except (OSError, KeyError, ValueError) as exc:
@@ -2094,28 +1998,10 @@ class ScanTab(ScrollableTab):
             return
         if message:
             messagebox.showinfo(APP_TITLE, message)
-        self.csv_path_var.set(use_path)
-        self.roster = roster
-        self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(roster)))
-
-    def _open_roster_manager(self):
-        def on_apply(roster, name):
-            self.roster = roster
-            self.csv_path_var.set(tr("csv_path_from_memory", name=name) if name else tr("csv_path_manual_edit"))
-            self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(roster)))
-
-        RosterManagerDialog(self, initial_roster=self.roster,
-                             initial_name=suggest_class_name(self.roster) if self.roster else None,
-                             on_apply=on_apply)
-
-    def _save_class_to_memory(self):
-        roster = self.roster
         if not roster:
-            messagebox.showwarning(APP_TITLE, tr("gen_roster_load_warn"))
             return
         suggested = suggest_class_name(roster)
-        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"),
-                                       initialvalue=suggested, parent=self)
+        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"), initialvalue=suggested, parent=self)
         if not name or not name.strip():
             return
         name = name.strip()
@@ -2124,6 +2010,7 @@ class ScanTab(ScrollableTab):
                 return
         class_archive.save_roster(name, roster)
         messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
+        self._refresh_scan_classes(select=name)
 
     # -- Photos -------------------------------------------------------
     def _add_photos(self):
@@ -2328,7 +2215,8 @@ class ScanTab(ScrollableTab):
             self.show_results_btn.config(state="normal")
             self.open_class_archive_btn.config(state="normal")
             s = self.settings
-            s["scan_csv_path"] = self.csv_path_var.get()
+            if self.scan_current_classe:
+                s["scan_last_classe"] = self.scan_current_classe
             app_config.save_settings(s)
             self.summary_label.config(text=format_batch_report(report))
 
@@ -2400,20 +2288,25 @@ class ScanTab(ScrollableTab):
             os.startfile(path)
 
     def _on_update_csv(self):
-        path = self.csv_path_var.get()
-        # csv_path_var sometimes shows an informational text rather than
-        # a real path (e.g. "(class from memory: 6A)" after loading from
-        # memory): never use it as-is as a file to write, always ask for
-        # a location in that case.
-        if not path or not path.lower().endswith(".csv"):
-            path = filedialog.asksaveasfilename(title=tr("res_update_csv_title"), defaultextension=".csv",
-                                                 filetypes=[(tr("file_csv"), "*.csv")])
-            if not path:
-                return
         merged = dict(self.roster)
         for e in self.report:
             if e.get("eleve") and e.get("sheet_number") is not None:
                 merged[e["sheet_number"]] = {"nom": e["eleve"], "classe": e.get("classe", "")}
+        # Roster tied to a class in memory -> update that class directly
+        # (the new model, see scan_current_classe); otherwise (a roster
+        # built ad hoc that was never attached to a class) fall back to
+        # exporting a plain CSV file.
+        if self.scan_current_classe:
+            class_archive.save_roster(self.scan_current_classe, merged)
+            self.roster = merged
+            self.scan_roster_editor.load_roster(merged)
+            messagebox.showinfo(APP_TITLE, tr("res_csv_updated_classe", name=self.scan_current_classe,
+                                               n=len(merged)))
+            return
+        path = filedialog.asksaveasfilename(title=tr("res_update_csv_title"), defaultextension=".csv",
+                                             filetypes=[(tr("file_csv"), "*.csv")])
+        if not path:
+            return
         try:
             with open(path, "w", newline="", encoding="utf-8-sig") as f:
                 w = csv.writer(f, delimiter=";")
@@ -2424,8 +2317,6 @@ class ScanTab(ScrollableTab):
             messagebox.showerror(APP_TITLE, tr("res_csv_save_error", detail=exc))
             return
         self.roster = merged
-        self.csv_path_var.set(path)
-        self.csv_info_label.config(text=tr("csv_loaded_simple", n=len(merged)))
         messagebox.showinfo(APP_TITLE, tr("res_csv_updated", path=path))
 
 

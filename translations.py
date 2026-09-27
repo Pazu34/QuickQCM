@@ -238,31 +238,18 @@ TRANSLATIONS = {
         "med_no_student_for_number": "Aucun élève avec le numéro {num} dans le tableau chargé.",
 
         # --- RosterManagerDialog ---
-        "rmd_title": "Tableau élèves — voir, modifier, mémoriser",
-        "rmd_store_group": "Classes enregistrées en mémoire",
-        "rmd_class_label": "Classe :",
-        "rmd_save_as_label": "Enregistrer le tableau ci-dessous sous le nom :",
         "rmd_save_to_memory": "Enregistrer en mémoire",
-        "rmd_table_group": "Tableau numéro / nom / classe",
-        "rmd_use_table": "Utiliser ce tableau",
         "rmd_choose_class_first": "Choisis d'abord une classe dans la liste.",
-        "rmd_confirm_replace_table": "Le tableau actuel sera remplacé par la classe chargée. Continuer ?",
-        "rmd_new_name_for": "Nouveau nom pour « {name} » :",
-        "rmd_confirm_delete_class": ("Supprimer définitivement la classe « {name} » (liste d'élèves ET tout "
-                                      "l'historique de corrections archivé pour cette classe) ?\n"
-                                      "(le tableau affiché ici n'est pas effacé)"),
-        "rmd_rename_target_exists": "Une classe « {name} » existe déjà — choisis un autre nom.",
         "rmd_fix_first": "Corrige d'abord :\n\n{errors}",
-        "rmd_table_empty": "Le tableau est vide.",
-        "rmd_name_required": "Donne un nom à cette classe avant de l'enregistrer.",
-        "rmd_class_saved": "Classe « {name} » enregistrée en mémoire ({n} élève(s)).",
         "rmd_invalid_number_for": "Numéro invalide pour « {name} ».",
         "rmd_no_name": "(sans nom)",
         "rmd_number_used_twice": "Le numéro {num} est utilisé plusieurs fois.",
         "rmd_name_missing_for": "Nom manquant pour le numéro {num}.",
 
         # --- ScanTab ---
-        "scan_csv_group": "1. Liste de la classe (CSV)",
+        "scan_csv_group": "1. Classe des copies à corriger",
+        "scan_manual_entry_btn": "Saisie manuelle",
+        "scan_load_csv_btn": "Charger un fichier CSV",
         "scan_photos_group": "2. Photos des copies",
         "scan_add_photos": "Ajouter des photos…",
         "scan_add_folder": "Ajouter un dossier…",
@@ -276,7 +263,7 @@ TRANSLATIONS = {
         "scan_archive_group": "3. Résultats et archive",
         "scan_archive_hint": ("Pour chaque correction, les résultats et la liste des élèves sont "
                                "automatiquement archivés, classe par classe, dans le dossier « Données » de "
-                               "l'application (donc sur la clé USB) — voir l'onglet « Données enregistrées ». "
+                               "l'application (donc sur la clé USB) — voir l'onglet « Gestion des données ». "
                                "Coche la case ci-dessous pour y garder aussi une copie compressée mais lisible "
                                "de chaque copie scannée (utile pour revérifier plus tard)."),
         "scan_save_copies_checkbox": "Sauvegarder aussi les copies scannées (compressées)",
@@ -293,7 +280,7 @@ TRANSLATIONS = {
         "scan_pdf_read_error": "Impossible de lire ce PDF :\n\n{detail}",
         "scan_pdf_extracted": "{n} page(s) extraite(s) de « {name} » et ajoutée(s) à la liste des photos.",
         "scan_need_photo": "Ajoute au moins une photo de copie avant de lancer la correction.",
-        "scan_no_csv_confirm": "Aucun fichier CSV classe chargé : tous les numéros seront signalés comme inconnus. Continuer ?",
+        "scan_no_csv_confirm": "Aucune classe chargée : tous les numéros seront signalés comme inconnus. Continuer ?",
         "scan_reading_photos": "Lecture de {n} photo(s) en cours…",
         "scan_failed": "Échec de la correction :\n\n{detail}",
         "scan_run_name_prefix": "Correction",
@@ -314,6 +301,7 @@ TRANSLATIONS = {
         "res_update_csv_title": "Enregistrer le CSV classe",
         "res_csv_save_error": "Impossible d'enregistrer le CSV : {detail}",
         "res_csv_updated": "CSV classe mis à jour : {path}",
+        "res_csv_updated_classe": "Classe « {name} » mise à jour ({n} élève(s)).",
 
         # --- ArchiveBrowserDialog ---
         "arch_title": "Charger une correction archivée",
@@ -560,30 +548,17 @@ TRANSLATIONS = {
         "med_number_required_first": "Enter a valid sheet number first.",
         "med_no_student_for_number": "No student with number {num} in the loaded table.",
 
-        "rmd_title": "Student table — view, edit, save",
-        "rmd_store_group": "Classes saved to memory",
-        "rmd_class_label": "Class:",
-        "rmd_save_as_label": "Save the table below under the name:",
         "rmd_save_to_memory": "Save to memory",
-        "rmd_table_group": "Number / name / class table",
-        "rmd_use_table": "Use this table",
         "rmd_choose_class_first": "Choose a class from the list first.",
-        "rmd_confirm_replace_table": "The current table will be replaced by the loaded class. Continue?",
-        "rmd_new_name_for": "New name for \u00ab{name}\u00bb:",
-        "rmd_confirm_delete_class": ("Permanently delete the class \u00ab{name}\u00bb (student list AND its "
-                                      "whole archived grading history)?\n"
-                                      "(the table shown here is not cleared)"),
-        "rmd_rename_target_exists": "A class \u00ab{name}\u00bb already exists \u2014 choose another name.",
         "rmd_fix_first": "Please fix first:\n\n{errors}",
-        "rmd_table_empty": "The table is empty.",
-        "rmd_name_required": "Give this class a name before saving it.",
-        "rmd_class_saved": "Class \u00ab{name}\u00bb saved to memory ({n} student(s)).",
         "rmd_invalid_number_for": "Invalid number for \u00ab{name}\u00bb.",
         "rmd_no_name": "(no name)",
         "rmd_number_used_twice": "Number {num} is used more than once.",
         "rmd_name_missing_for": "Missing name for number {num}.",
 
-        "scan_csv_group": "1. Class list (CSV)",
+        "scan_csv_group": "1. Class for these copies",
+        "scan_manual_entry_btn": "Manual entry",
+        "scan_load_csv_btn": "Load a CSV file",
         "scan_photos_group": "2. Photos of the copies",
         "scan_add_photos": "Add photos…",
         "scan_add_folder": "Add a folder…",
@@ -597,7 +572,7 @@ TRANSLATIONS = {
         "scan_archive_group": "3. Results and archive",
         "scan_archive_hint": ("For every grading run, the results and the student list are automatically "
                                "archived, class by class, in the application's «Données» folder (so on the USB "
-                               "drive) — see the «Saved Data» tab. Tick the box below to also keep "
+                               "drive) — see the «Data Management» tab. Tick the box below to also keep "
                                "a compressed but legible copy of every scanned sheet there (handy to "
                                "double-check later)."),
         "scan_save_copies_checkbox": "Also save the scanned copies (compressed)",
@@ -614,7 +589,7 @@ TRANSLATIONS = {
         "scan_pdf_read_error": "Couldn't read this PDF:\n\n{detail}",
         "scan_pdf_extracted": "{n} page(s) extracted from \u00ab{name}\u00bb and added to the photo list.",
         "scan_need_photo": "Add at least one photo of a copy before running the grading.",
-        "scan_no_csv_confirm": "No class CSV loaded: every number will be reported as unknown. Continue?",
+        "scan_no_csv_confirm": "No class loaded: every number will be reported as unknown. Continue?",
         "scan_reading_photos": "Reading {n} photo(s)…",
         "scan_failed": "Grading failed:\n\n{detail}",
         "scan_run_name_prefix": "Grading",
@@ -633,6 +608,7 @@ TRANSLATIONS = {
         "res_update_csv_title": "Save the class CSV",
         "res_csv_save_error": "Couldn't save the CSV: {detail}",
         "res_csv_updated": "Class CSV updated: {path}",
+        "res_csv_updated_classe": "Class «{name}» updated ({n} student(s)).",
 
         # --- ArchiveBrowserDialog ---
         "arch_title": "Load an archived correction",
@@ -878,30 +854,17 @@ TRANSLATIONS = {
         "med_number_required_first": "Gib zuerst eine gültige Bogennummer ein.",
         "med_no_student_for_number": "Kein Schüler mit Nummer {num} in der geladenen Tabelle.",
 
-        "rmd_title": "Schülertabelle — ansehen, bearbeiten, speichern",
-        "rmd_store_group": "Im Speicher gesicherte Klassen",
-        "rmd_class_label": "Klasse:",
-        "rmd_save_as_label": "Untenstehende Tabelle speichern unter dem Namen:",
         "rmd_save_to_memory": "Im Speicher sichern",
-        "rmd_table_group": "Tabelle Nummer / Name / Klasse",
-        "rmd_use_table": "Diese Tabelle verwenden",
         "rmd_choose_class_first": "Wähle zuerst eine Klasse aus der Liste.",
-        "rmd_confirm_replace_table": "Die aktuelle Tabelle wird durch die geladene Klasse ersetzt. Fortfahren?",
-        "rmd_new_name_for": "Neuer Name für „{name}“:",
-        "rmd_confirm_delete_class": ("Klasse „{name}“ endgültig löschen (Schülerliste UND der gesamte "
-                                      "archivierte Korrekturverlauf dieser Klasse)?\n"
-                                      "(die hier angezeigte Tabelle wird nicht gelöscht)"),
-        "rmd_rename_target_exists": "Eine Klasse „{name}“ existiert bereits — wähle einen anderen Namen.",
         "rmd_fix_first": "Bitte zuerst korrigieren:\n\n{errors}",
-        "rmd_table_empty": "Die Tabelle ist leer.",
-        "rmd_name_required": "Gib dieser Klasse einen Namen, bevor du sie speicherst.",
-        "rmd_class_saved": "Klasse „{name}“ im Speicher gesichert ({n} Schüler).",
         "rmd_invalid_number_for": "Ungültige Nummer für „{name}“.",
         "rmd_no_name": "(kein Name)",
         "rmd_number_used_twice": "Die Nummer {num} wird mehrfach verwendet.",
         "rmd_name_missing_for": "Name fehlt für Nummer {num}.",
 
-        "scan_csv_group": "1. Klassenliste (CSV)",
+        "scan_csv_group": "1. Klasse für diese Bögen",
+        "scan_manual_entry_btn": "Manuelle Eingabe",
+        "scan_load_csv_btn": "CSV-Datei laden",
         "scan_photos_group": "2. Fotos der Kopien",
         "scan_add_photos": "Fotos hinzufügen…",
         "scan_add_folder": "Ordner hinzufügen…",
@@ -915,7 +878,7 @@ TRANSLATIONS = {
         "scan_archive_group": "3. Ergebnisse und Archiv",
         "scan_archive_hint": ("Bei jeder Korrektur werden die Ergebnisse und die Schülerliste automatisch "
                                "klassenweise im Ordner „Données“ der Anwendung archiviert (also auf dem "
-                               "USB-Stick) — siehe Registerkarte „Gespeicherte Daten“. Aktiviere das Kästchen "
+                               "USB-Stick) — siehe Registerkarte „Datenverwaltung“. Aktiviere das Kästchen "
                                "unten, um dort auch eine komprimierte, aber lesbare Kopie jedes gescannten "
                                "Bogens aufzubewahren (praktisch zum späteren Nachprüfen)."),
         "scan_save_copies_checkbox": "Auch die gescannten Kopien speichern (komprimiert)",
@@ -932,7 +895,7 @@ TRANSLATIONS = {
         "scan_pdf_read_error": "Dieses PDF konnte nicht gelesen werden:\n\n{detail}",
         "scan_pdf_extracted": "{n} Seite(n) aus „{name}“ extrahiert und zur Fotoliste hinzugefügt.",
         "scan_need_photo": "Füge mindestens ein Foto einer Kopie hinzu, bevor du die Korrektur startest.",
-        "scan_no_csv_confirm": "Keine Klassen-CSV geladen: Alle Nummern werden als unbekannt gemeldet. Fortfahren?",
+        "scan_no_csv_confirm": "Keine Klasse geladen: Alle Nummern werden als unbekannt gemeldet. Fortfahren?",
         "scan_reading_photos": "{n} Foto(s) werden gelesen…",
         "scan_failed": "Korrektur fehlgeschlagen:\n\n{detail}",
         "scan_run_name_prefix": "Korrektur",
@@ -952,6 +915,7 @@ TRANSLATIONS = {
         "res_update_csv_title": "Klassen-CSV speichern",
         "res_csv_save_error": "CSV konnte nicht gespeichert werden: {detail}",
         "res_csv_updated": "Klassen-CSV aktualisiert: {path}",
+        "res_csv_updated_classe": "Klasse „{name}“ aktualisiert ({n} Schüler).",
 
         # --- ArchiveBrowserDialog ---
         "arch_title": "Archivierte Korrektur laden",
@@ -1197,30 +1161,17 @@ TRANSLATIONS = {
         "med_number_required_first": "Introduce primero un número de hoja válido.",
         "med_no_student_for_number": "Ningún alumno con el número {num} en la tabla cargada.",
 
-        "rmd_title": "Tabla de alumnos — ver, editar, guardar",
-        "rmd_store_group": "Clases guardadas en memoria",
-        "rmd_class_label": "Clase:",
-        "rmd_save_as_label": "Guardar la tabla de abajo con el nombre:",
         "rmd_save_to_memory": "Guardar en memoria",
-        "rmd_table_group": "Tabla número / nombre / clase",
-        "rmd_use_table": "Usar esta tabla",
         "rmd_choose_class_first": "Elige primero una clase de la lista.",
-        "rmd_confirm_replace_table": "La tabla actual será reemplazada por la clase cargada. ¿Continuar?",
-        "rmd_new_name_for": "Nuevo nombre para «{name}»:",
-        "rmd_confirm_delete_class": ("¿Eliminar definitivamente la clase «{name}» (lista de alumnos Y todo el "
-                                      "historial de correcciones archivado de esta clase)?\n"
-                                      "(la tabla mostrada aquí no se borra)"),
-        "rmd_rename_target_exists": "Ya existe una clase «{name}» — elige otro nombre.",
         "rmd_fix_first": "Corrige primero:\n\n{errors}",
-        "rmd_table_empty": "La tabla está vacía.",
-        "rmd_name_required": "Dale un nombre a esta clase antes de guardarla.",
-        "rmd_class_saved": "Clase «{name}» guardada en memoria ({n} alumno(s)).",
         "rmd_invalid_number_for": "Número no válido para «{name}».",
         "rmd_no_name": "(sin nombre)",
         "rmd_number_used_twice": "El número {num} se usa más de una vez.",
         "rmd_name_missing_for": "Falta el nombre para el número {num}.",
 
-        "scan_csv_group": "1. Lista de la clase (CSV)",
+        "scan_csv_group": "1. Clase de estas copias",
+        "scan_manual_entry_btn": "Entrada manual",
+        "scan_load_csv_btn": "Cargar un archivo CSV",
         "scan_photos_group": "2. Fotos de las copias",
         "scan_add_photos": "Añadir fotos…",
         "scan_add_folder": "Añadir una carpeta…",
@@ -1234,7 +1185,7 @@ TRANSLATIONS = {
         "scan_archive_group": "3. Resultados y archivo",
         "scan_archive_hint": ("En cada corrección, los resultados y la lista de alumnos se archivan "
                                "automáticamente, clase por clase, en la carpeta «Données» de la aplicación (es "
-                               "decir, en la memoria USB) — ver la pestaña «Datos guardados». Marca la casilla "
+                               "decir, en la memoria USB) — ver la pestaña «Gestión de datos». Marca la casilla "
                                "de abajo para conservar también allí una copia comprimida pero legible de cada "
                                "hoja escaneada (útil para volver a comprobarla más tarde)."),
         "scan_save_copies_checkbox": "Guardar también las copias escaneadas (comprimidas)",
@@ -1251,7 +1202,7 @@ TRANSLATIONS = {
         "scan_pdf_read_error": "No se pudo leer este PDF:\n\n{detail}",
         "scan_pdf_extracted": "{n} página(s) extraída(s) de «{name}» y añadida(s) a la lista de fotos.",
         "scan_need_photo": "Añade al menos una foto de una copia antes de iniciar la corrección.",
-        "scan_no_csv_confirm": "No se cargó ningún CSV de clase: todos los números se marcarán como desconocidos. ¿Continuar?",
+        "scan_no_csv_confirm": "No se cargó ninguna clase: todos los números se marcarán como desconocidos. ¿Continuar?",
         "scan_reading_photos": "Leyendo {n} foto(s)…",
         "scan_failed": "Error en la corrección:\n\n{detail}",
         "scan_run_name_prefix": "Correccion",
@@ -1271,6 +1222,7 @@ TRANSLATIONS = {
         "res_update_csv_title": "Guardar el CSV de clase",
         "res_csv_save_error": "No se pudo guardar el CSV: {detail}",
         "res_csv_updated": "CSV de clase actualizado: {path}",
+        "res_csv_updated_classe": "Clase «{name}» actualizada ({n} alumno(s)).",
 
         # --- ArchiveBrowserDialog ---
         "arch_title": "Cargar una corrección archivada",
