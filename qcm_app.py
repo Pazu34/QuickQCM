@@ -539,12 +539,30 @@ class ScrollableFrame(ttk.Frame):
         return False
 
 
+class ScrollableTab(ttk.Frame):
+    """Base class for a Notebook tab, wrapping its content in a
+    vertically scrollable area (see ScrollableFrame) instead of packing
+    it directly. A small laptop screen, or the window resized/snapped to
+    half the screen (Windows' Win+Left/Right), can leave less height
+    than a tab's content needs -- without this, some buttons at the
+    bottom (e.g. "Generer le PDF") become impossible to reach. Subclasses
+    build their content onto self.body (an inset ttk.Frame) instead of
+    self."""
+
+    def __init__(self, master, padding=12):
+        super().__init__(master)
+        self.scroll = ScrollableFrame(self)
+        self.scroll.pack(fill="both", expand=True)
+        self.body = self.scroll.inner
+        self.body.configure(padding=padding)
+
+
 # ---------------------------------------------------------------------
 # Tab 1: answer sheet generation
 # ---------------------------------------------------------------------
-class GenerateTab(ttk.Frame):
+class GenerateTab(ScrollableTab):
     def __init__(self, master):
-        super().__init__(master, padding=12)
+        super().__init__(master)
         self.settings = app_config.load_settings()
         self.roster_mode = tk.StringVar(value="manuel")
         self.csv_path = tk.StringVar(value="")
@@ -554,7 +572,7 @@ class GenerateTab(ttk.Frame):
     def _build_ui(self):
         s = self.settings
 
-        form = ttk.LabelFrame(self, text=tr("gen_sheet_group"), padding=10)
+        form = ttk.LabelFrame(self.body, text=tr("gen_sheet_group"), padding=10)
         form.pack(fill="x", pady=(0, 10))
         form.columnconfigure(1, weight=1)
 
@@ -596,7 +614,7 @@ class GenerateTab(ttk.Frame):
         ttk.Combobox(form, textvariable=self.preset_var, values=self._preset_labels,
                      state="readonly", width=38).grid(row=row, column=1, sticky="we", padx=5)
 
-        roster_frame = ttk.LabelFrame(self, text=tr("gen_students_group"), padding=10)
+        roster_frame = ttk.LabelFrame(self.body, text=tr("gen_students_group"), padding=10)
         roster_frame.pack(fill="x", pady=(0, 10))
 
         modes = [
@@ -681,7 +699,7 @@ class GenerateTab(ttk.Frame):
 
         self._on_roster_mode_change()
 
-        out_frame = ttk.LabelFrame(self, text=tr("gen_output_group"), padding=10)
+        out_frame = ttk.LabelFrame(self.body, text=tr("gen_output_group"), padding=10)
         out_frame.pack(fill="x", pady=(0, 10))
         self.output_dir_var = tk.StringVar(
             value=s.get("generate_output_dir",
@@ -691,7 +709,7 @@ class GenerateTab(ttk.Frame):
         ttk.Entry(row2, textvariable=self.output_dir_var, width=50).pack(side="left", fill="x", expand=True)
         ttk.Button(row2, text=tr("btn_browse"), command=self._browse_output_dir).pack(side="left", padx=5)
 
-        action_row = ttk.Frame(self)
+        action_row = ttk.Frame(self.body)
         action_row.pack(fill="x", pady=6)
         self.preview_btn = ttk.Button(action_row, text=tr("gen_btn_preview"), command=self._on_preview)
         self.preview_btn.pack(side="left")
@@ -700,7 +718,7 @@ class GenerateTab(ttk.Frame):
         self.progress = ttk.Progressbar(action_row, mode="indeterminate", length=200)
         self.progress.pack(side="left", padx=10)
 
-        self.status_label = ttk.Label(self, text="", foreground="#333333", wraplength=760, justify="left")
+        self.status_label = ttk.Label(self.body, text="", foreground="#333333", wraplength=760, justify="left")
         self.status_label.pack(fill="x", pady=(6, 0))
 
     def _update_extra_blank_visibility(self, *_):
@@ -1819,9 +1837,9 @@ class ArchiveBrowserDialog(tk.Toplevel):
 # ---------------------------------------------------------------------
 # Tab 2: scanning and grading
 # ---------------------------------------------------------------------
-class ScanTab(ttk.Frame):
+class ScanTab(ScrollableTab):
     def __init__(self, master):
-        super().__init__(master, padding=12)
+        super().__init__(master)
         self.settings = app_config.load_settings()
         self.roster = {}
         self.report = []
@@ -1838,7 +1856,7 @@ class ScanTab(ttk.Frame):
     def _build_ui(self):
         s = self.settings
 
-        top = ttk.Frame(self)
+        top = ttk.Frame(self.body)
         top.pack(fill="x")
 
         csv_frame = ttk.LabelFrame(top, text=tr("scan_csv_group"), padding=10)
@@ -1889,7 +1907,7 @@ class ScanTab(ttk.Frame):
         ttk.Checkbutton(archive_frame, text=tr("scan_save_copies_checkbox"), variable=self.save_copies_var,
                          command=self._on_toggle_save_copies).pack(anchor="w", pady=(6, 0))
 
-        action_row = ttk.Frame(self)
+        action_row = ttk.Frame(self.body)
         action_row.pack(fill="x", pady=6)
         self.run_btn = ttk.Button(action_row, text=tr("scan_btn_run"), command=self._on_run)
         self.run_btn.pack(side="left")
@@ -1904,7 +1922,7 @@ class ScanTab(ttk.Frame):
         ttk.Button(action_row, text=tr("scan_load_archive_btn"),
                    command=self._open_archive_browser).pack(side="left", padx=5)
 
-        self.status_label = ttk.Label(self, text="", foreground="#555555")
+        self.status_label = ttk.Label(self.body, text="", foreground="#555555")
         self.status_label.pack(fill="x", pady=(4, 0))
 
     def _ensure_results_window(self):
@@ -2315,7 +2333,7 @@ class ScanTab(ttk.Frame):
 # Tab 3: reviewing/editing/analyzing the saved per-class archive
 # (class_archive.py) -- roster, and the history of past corrections.
 # ---------------------------------------------------------------------
-class DataTab(ttk.Frame):
+class DataTab(ScrollableTab):
     """Trois modes, choisis par les boutons radio du haut : les listes
     d'élèves (classes) enregistrées, les corrections archivées, et les
     corrigés/barèmes de QCM réutilisables (voir answer_key_store.py). Les
@@ -2324,7 +2342,7 @@ class DataTab(ttk.Frame):
     liés à une classe en particulier)."""
 
     def __init__(self, master, on_load_correction):
-        super().__init__(master, padding=12)
+        super().__init__(master)
         self.on_load_correction = on_load_correction
         self.current_classe = None
         self.mode_var = tk.StringVar(value="classes")
@@ -2333,7 +2351,7 @@ class DataTab(ttk.Frame):
         self._refresh_keys()
 
     def _build_ui(self):
-        mode_frame = ttk.Frame(self)
+        mode_frame = ttk.Frame(self.body)
         mode_frame.pack(fill="x", pady=(0, 8))
         modes = [
             ("classes", tr("data_mode_classes")),
@@ -2344,7 +2362,7 @@ class DataTab(ttk.Frame):
             ttk.Radiobutton(mode_frame, text=label, variable=self.mode_var, value=value,
                             command=self._on_mode_change).pack(side="left", padx=(0, 15))
 
-        self.classe_row = ttk.Frame(self)
+        self.classe_row = ttk.Frame(self.body)
         ttk.Label(self.classe_row, text=tr("data_class_label")).pack(side="left")
         self.classe_var = tk.StringVar()
         self.classe_combo = ttk.Combobox(self.classe_row, textvariable=self.classe_var, state="readonly", width=25)
@@ -2355,10 +2373,10 @@ class DataTab(ttk.Frame):
                                            command=self._open_folder, state="disabled")
         self.open_folder_btn.pack(side="left", padx=5)
 
-        self.summary_label = ttk.Label(self, text="", foreground="#333333", wraplength=760, justify="left")
+        self.summary_label = ttk.Label(self.body, text="", foreground="#333333", wraplength=760, justify="left")
 
         # --- Mode : listes d'élèves (classes) ---
-        self.classes_mode_frame = ttk.Frame(self)
+        self.classes_mode_frame = ttk.Frame(self.body)
 
         new_class_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_new_class_group"), padding=10)
         new_class_frame.pack(fill="x", pady=(0, 8))
@@ -2381,7 +2399,7 @@ class DataTab(ttk.Frame):
             anchor="w", pady=(6, 0))
 
         # --- Mode : corrections enregistrées ---
-        self.corrections_mode_frame = ttk.Frame(self)
+        self.corrections_mode_frame = ttk.Frame(self.body)
         corr_frame = ttk.LabelFrame(self.corrections_mode_frame, text=tr("data_corrections_group"), padding=10)
         corr_frame.pack(fill="both", expand=True)
         columns = ("nom", "date", "eleves", "moyenne")
@@ -2400,7 +2418,7 @@ class DataTab(ttk.Frame):
                    command=self._delete_selected_correction).pack(side="left", padx=5)
 
         # --- Mode : corrigés et barèmes de QCM ---
-        self.keys_mode_frame = ttk.Frame(self)
+        self.keys_mode_frame = ttk.Frame(self.body)
         keys_frame = ttk.LabelFrame(self.keys_mode_frame, text=tr("data_keys_group"), padding=10)
         keys_frame.pack(fill="both", expand=True)
         key_columns = ("nom", "questions", "points")
@@ -2618,12 +2636,12 @@ class DataTab(ttk.Frame):
 # ---------------------------------------------------------------------
 # Tab 4: preferences (language)
 # ---------------------------------------------------------------------
-class PreferencesTab(ttk.Frame):
+class PreferencesTab(ScrollableTab):
     def __init__(self, master, on_language_change):
-        super().__init__(master, padding=12)
+        super().__init__(master)
         self.on_language_change = on_language_change
 
-        lang_frame = ttk.LabelFrame(self, text=tr("prefs_group"), padding=10)
+        lang_frame = ttk.LabelFrame(self.body, text=tr("prefs_group"), padding=10)
         lang_frame.pack(fill="x", pady=(0, 10))
         row = ttk.Frame(lang_frame)
         row.pack(fill="x")
@@ -2638,7 +2656,7 @@ class PreferencesTab(ttk.Frame):
         ttk.Label(lang_frame, text=tr("prefs_hint"), foreground="#555555",
                   wraplength=620, justify="left").pack(anchor="w", pady=(6, 0))
 
-        about_frame = ttk.LabelFrame(self, text=tr("prefs_about_group"), padding=10)
+        about_frame = ttk.LabelFrame(self.body, text=tr("prefs_about_group"), padding=10)
         about_frame.pack(fill="x")
         ttk.Label(about_frame, text=tr("prefs_about_text"), justify="left",
                   wraplength=620, foreground="#555555").pack(anchor="w")
@@ -2654,12 +2672,29 @@ class PreferencesTab(ttk.Frame):
         self.on_language_change()
 
 
+def _size_window_to_screen(root, default_w=880, default_h=820, min_w=420, min_h=320):
+    """Sizes and centers the main window to fit the screen it's launched
+    on, instead of a fixed size that can exceed a small laptop screen or
+    a window snapped to half the screen (Windows' Win+Left/Right) --
+    either of which could otherwise push buttons off-screen with no way
+    to reach them. A minimum size is set too; below that, tab content
+    scrolls instead of being clipped further (see ScrollableTab)."""
+    screen_w = root.winfo_screenwidth()
+    screen_h = root.winfo_screenheight()
+    win_w = min(default_w, max(min_w, int(screen_w * 0.9)))
+    win_h = min(default_h, max(min_h, int(screen_h * 0.9)))
+    x = max(0, (screen_w - win_w) // 2)
+    y = max(0, (screen_h - win_h) // 2)
+    root.geometry(f"{win_w}x{win_h}+{x}+{y}")
+    root.minsize(min_w, min_h)
+
+
 def main():
     translations.load_language_from_settings()
     class_archive.migrate_legacy_class_store()
     answer_key_store.migrate_legacy_store()
     root = tk.Tk()
-    root.geometry("880x820")
+    _size_window_to_screen(root)
 
     try:
         style = ttk.Style()
