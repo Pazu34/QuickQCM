@@ -384,6 +384,34 @@ def build_run_name(roster, photo_paths, existing_names=()):
     return dedupe_name(base, existing_names)
 
 
+def sheets_pdf_basename(cfg, classe):
+    """Filename (without extension) for a generated answer-sheet PDF:
+    question/choice counts, class (if known) and generation date, e.g.
+    "12Q4R_6A_2026-09-27" -- self-explanatory when browsed directly in
+    Windows Explorer, instead of an opaque timestamp (see
+    GenerateTab._on_generate)."""
+    parts = [f"{cfg.n_questions}Q{cfg.n_choices}R"]
+    if classe:
+        parts.append(_sanitize_filename_part(classe))
+    parts.append(time.strftime("%Y-%m-%d"))
+    return "_".join(parts)
+
+
+def unique_pdf_and_csv_paths(directory, base):
+    """(pdf_path, csv_path) for `base` in `directory`, appending "_2",
+    "_3"... to `base` if a file already exists under either extension --
+    so generating twice the same day for the same class/config never
+    silently overwrites the previous PDF (or its companion roster CSV,
+    see GenerateTab._on_generate)."""
+    name = base
+    n = 2
+    while os.path.exists(os.path.join(directory, name + ".pdf")) or \
+            os.path.exists(os.path.join(directory, name + ".csv")):
+        name = f"{base}_{n}"
+        n += 1
+    return os.path.join(directory, name + ".pdf"), os.path.join(directory, name + ".csv")
+
+
 # ---------------------------------------------------------------------
 # Sheet generation for an ARBITRARY (not necessarily consecutive) list
 # of numbers -- case of an already-existing class CSV where each student
@@ -873,21 +901,39 @@ class GenerateTab(ScrollableTab):
             roster_rows = self.loaded_csv_roster
             numbers_from_csv = sorted(roster_rows.keys())
 
-        output_dir = self.output_dir_var.get().strip()
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-        except OSError as exc:
-            messagebox.showerror(APP_TITLE, tr("gen_output_dir_error", detail=exc))
-            return
+        if mode == "manuel":
+            classe_effective = classe_for_all or None
+        elif mode == "csv":
+            classe_effective = suggest_class_name(roster_rows) or None
+        else:
+            classe_effective = None
+
+        # Une classe identifiee -> range le PDF avec les autres donnees de
+        # cette classe (Donnees/Classes/<classe>/) plutot que dans le
+        # dossier de sortie choisi, qui ne sert alors que si aucune classe
+        # n'est identifiee (mode "aucun", ou mode manuel sans classe saisie).
+        if classe_effective:
+            try:
+                target_dir = class_archive.class_dir(classe_effective)
+            except OSError as exc:
+                messagebox.showerror(APP_TITLE, tr("gen_output_dir_error", detail=exc))
+                return
+        else:
+            target_dir = self.output_dir_var.get().strip()
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+            except OSError as exc:
+                messagebox.showerror(APP_TITLE, tr("gen_output_dir_error", detail=exc))
+                return
 
         self.generate_btn.config(state="disabled")
         self.progress.start(12)
         self.status_label.config(text=tr("gen_generating"))
 
         def work():
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            pdf_path = os.path.join(output_dir, f"feuilles_{timestamp}.pdf")
-            csv_path = None
+            base_name = sheets_pdf_basename(cfg, classe_effective)
+            pdf_path, csv_path = unique_pdf_and_csv_paths(target_dir, base_name)
+            csv_path_used = None
             print_name = bool(self.print_name_var.get())
             print_classe = bool(self.print_classe_var.get())
             n_extra = 0
@@ -905,8 +951,8 @@ class GenerateTab(ScrollableTab):
                     }
                 generated_numbers = build_batch(pdf_path, cfg, start_number=start_number,
                                                  n_sheets=len(names) + n_extra, identities=identities)
-                csv_path = os.path.join(output_dir, f"classe_{timestamp}.csv")
-                with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+                csv_path_used = csv_path
+                with open(csv_path_used, "w", newline="", encoding="utf-8-sig") as f:
                     w = csv.writer(f, delimiter=";")
                     w.writerow(["numero", "nom", "classe"])
                     for num, name in zip(generated_numbers, names):
@@ -927,7 +973,7 @@ class GenerateTab(ScrollableTab):
                 start_number = int(self.start_number_var.get())
                 n_sheets = int(self.n_sheets_var.get())
                 generated_numbers = build_batch(pdf_path, cfg, start_number=start_number, n_sheets=n_sheets)
-            return pdf_path, csv_path, generated_numbers, cfg, n_extra
+            return pdf_path, csv_path_used, generated_numbers, cfg, n_extra
 
         def on_done(err, result):
             self.progress.stop()
@@ -949,7 +995,7 @@ class GenerateTab(ScrollableTab):
                 msg += tr("gen_csv_class_line", path=csv_path)
             self.status_label.config(text=msg)
             if messagebox.askyesno(APP_TITLE, msg + tr("gen_open_folder_now")):
-                os.startfile(output_dir)
+                os.startfile(os.path.dirname(pdf_path))
 
         run_in_background(self, work, on_done)
 
