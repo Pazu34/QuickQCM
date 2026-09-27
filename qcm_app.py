@@ -649,6 +649,7 @@ class GenerateTab(ScrollableTab):
             ("manuel", tr("gen_mode_manual")),
             ("csv", tr("gen_mode_csv")),
             ("aucun", tr("gen_mode_none")),
+            ("multi", tr("gen_mode_multi")),
         ]
         for value, label in modes:
             mode_row = ttk.Frame(roster_frame)
@@ -701,6 +702,19 @@ class GenerateTab(ScrollableTab):
         ttk.Label(start_row, text=tr("gen_start_number_label")).pack(side="left")
         self.start_number_var = tk.IntVar(value=s.get("start_number", 1))
         ttk.Spinbox(start_row, from_=1, to=255, textvariable=self.start_number_var, width=8).pack(side="left", padx=5)
+
+        self.multi_frame = ttk.Frame(roster_frame)
+        ttk.Label(self.multi_frame, text=tr("gen_multi_hint")).pack(anchor="w")
+        multi_list_row = ttk.Frame(self.multi_frame)
+        multi_list_row.pack(fill="x", pady=3)
+        self.multi_classes_list = tk.Listbox(multi_list_row, selectmode=tk.EXTENDED, height=6,
+                                              exportselection=False)
+        self.multi_classes_list.pack(side="left", fill="both", expand=True)
+        multi_scroll = ttk.Scrollbar(multi_list_row, orient="vertical", command=self.multi_classes_list.yview)
+        multi_scroll.pack(side="left", fill="y")
+        self.multi_classes_list.config(yscrollcommand=multi_scroll.set)
+        ttk.Button(self.multi_frame, text=tr("btn_refresh"), command=self._refresh_multi_classes_list).pack(
+            anchor="w", pady=(3, 0))
 
         identity_frame = ttk.Frame(roster_frame)
         identity_frame.pack(fill="x", pady=(8, 0), anchor="w")
@@ -757,15 +771,26 @@ class GenerateTab(ScrollableTab):
             self.extra_blank_frame.pack_forget()
 
     def _on_roster_mode_change(self):
-        for f in (self.manual_frame, self.csv_frame, self.aucun_frame):
+        for f in (self.manual_frame, self.csv_frame, self.aucun_frame, self.multi_frame):
             f.pack_forget()
         mode = self.roster_mode.get()
         if mode == "manuel":
             self.manual_frame.pack(fill="x", pady=(6, 0))
         elif mode == "csv":
             self.csv_frame.pack(fill="x", pady=(6, 0))
+        elif mode == "multi":
+            self.multi_frame.pack(fill="x", pady=(6, 0))
+            self._refresh_multi_classes_list()
         else:
             self.aucun_frame.pack(fill="x", pady=(6, 0))
+
+    def _refresh_multi_classes_list(self):
+        selected = {self.multi_classes_list.get(i) for i in self.multi_classes_list.curselection()}
+        self.multi_classes_list.delete(0, "end")
+        for name in class_archive.list_classes():
+            self.multi_classes_list.insert("end", name)
+            if name in selected:
+                self.multi_classes_list.selection_set("end")
 
     def _browse_csv(self):
         path = filedialog.askopenfilename(title=tr("csv_choose_file"),
@@ -886,6 +911,11 @@ class GenerateTab(ScrollableTab):
             return
 
         mode = self.roster_mode.get()
+
+        if mode == "multi":
+            self._on_generate_multi(cfg)
+            return
+
         names, classe_for_all, numbers_from_csv, roster_rows = None, "", None, None
         if mode == "manuel":
             raw = self.names_text.get("1.0", "end").splitlines()
@@ -996,6 +1026,67 @@ class GenerateTab(ScrollableTab):
             self.status_label.config(text=msg)
             if messagebox.askyesno(APP_TITLE, msg + tr("gen_open_folder_now")):
                 os.startfile(os.path.dirname(pdf_path))
+
+        run_in_background(self, work, on_done)
+
+    def _on_generate_multi(self, cfg):
+        """Generates one PDF per class selected in self.multi_classes_list,
+        with the SAME sheet config (cfg) and the SAME identity/extra-blank
+        options as the other modes -- each PDF lands in that class's own
+        archive folder (see class_archive.class_dir), named the usual way
+        (see sheets_pdf_basename)."""
+        selected = [self.multi_classes_list.get(i) for i in self.multi_classes_list.curselection()]
+        if not selected:
+            messagebox.showwarning(APP_TITLE, tr("gen_multi_select_required"))
+            return
+
+        print_name = bool(self.print_name_var.get())
+        print_classe = bool(self.print_classe_var.get())
+        n_extra = 0
+        if (print_name or print_classe) and self.extra_blank_enabled_var.get():
+            n_extra = int(self.extra_blank_n_var.get())
+
+        self.generate_btn.config(state="disabled")
+        self.progress.start(12)
+        self.status_label.config(text=tr("gen_generating"))
+
+        def work():
+            lines = []
+            for classe in selected:
+                roster = class_archive.load_roster(classe)
+                if not roster:
+                    lines.append(tr("gen_multi_line_empty", classe=classe))
+                    continue
+                numbers = sorted(roster.keys())
+                identities = None
+                if print_name or print_classe:
+                    identities = {
+                        num: (roster[num]["nom"] if print_name else None,
+                              roster[num].get("classe") if (print_classe and roster[num].get("classe")) else None)
+                        for num in numbers
+                    }
+                extra_numbers = list(range(max(numbers) + 1, max(numbers) + 1 + n_extra))
+                generated_numbers = numbers + extra_numbers
+                target_dir = class_archive.class_dir(classe)
+                base_name = sheets_pdf_basename(cfg, classe)
+                pdf_path, _ = unique_pdf_and_csv_paths(target_dir, base_name)
+                build_for_numbers(pdf_path, cfg, generated_numbers, identities=identities)
+                lines.append(tr("gen_multi_line", classe=classe, n=len(generated_numbers), path=pdf_path))
+            return lines
+
+        def on_done(err, lines):
+            self.progress.stop()
+            self.generate_btn.config(state="normal")
+            if err:
+                exc, tb = err
+                messagebox.showerror(APP_TITLE, tr("gen_failed", detail=exc))
+                self.status_label.config(text="")
+                return
+            self._save_settings()
+            msg = tr("gen_multi_summary_title", n=len(selected)) + "\n".join(lines)
+            self.status_label.config(text=msg)
+            if messagebox.askyesno(APP_TITLE, msg + tr("gen_open_classes_folder_now")):
+                os.startfile(class_archive.classes_root_dir())
 
         run_in_background(self, work, on_done)
 

@@ -87,9 +87,16 @@ def run_dir(classe_name, run_name):
     return path
 
 
+def classes_root_dir():
+    """The "Classes" folder itself (path only, not created) -- e.g. to
+    open it directly after generating sheets for several classes at
+    once (see qcm_app.GenerateTab)."""
+    return os.path.join(app_config.get_config_dir(), ARCHIVE_ROOT_NAME)
+
+
 def list_classes():
     """Names of every class that has an archive folder, alphabetically."""
-    root = os.path.join(app_config.get_config_dir(), ARCHIVE_ROOT_NAME)
+    root = classes_root_dir()
     if not os.path.isdir(root):
         return []
     return sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))

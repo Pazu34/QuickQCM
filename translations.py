@@ -134,6 +134,12 @@ TRANSLATIONS = {
         "gen_mode_manual": "Saisir la liste des noms maintenant",
         "gen_mode_csv": "J'ai déjà un fichier CSV (numero,nom,classe)",
         "gen_mode_none": "Pas de liste pour l'instant (juste des numéros)",
+        "gen_mode_multi": "Générer pour plusieurs classes enregistrées",
+        "gen_multi_hint": "Sélectionne une ou plusieurs classes (Ctrl/Shift-clic pour plusieurs) :",
+        "gen_multi_no_classes": ("Aucune classe enregistrée pour l'instant. Enregistre d'abord une classe "
+                                  "(onglet Gestion des données, ou bouton « Enregistrer cette classe en "
+                                  "mémoire »)."),
+        "gen_multi_select_required": "Sélectionne au moins une classe dans la liste.",
         "gen_manual_names_hint": "Un nom par ligne (l'ordre donne le numéro de feuille) :",
         "gen_manual_classe_label": "Classe (facultatif, appliquée à tous) :",
         "gen_roster_table_btn": "Tableau élèves (voir/modifier/mémoire)…",
@@ -168,6 +174,10 @@ TRANSLATIONS = {
                                      "pré-remplis (numéros {start} à {end})."),
         "gen_csv_class_line": "\nCSV classe : {path}",
         "gen_open_folder_now": "\n\nOuvrir le dossier maintenant ?",
+        "gen_multi_line": "{classe} : {n} feuille(s) → {path}",
+        "gen_multi_line_empty": "{classe} : aucun élève enregistré, classe ignorée.",
+        "gen_multi_summary_title": "{n} classe(s) traitée(s) :\n",
+        "gen_open_classes_folder_now": "\n\nOuvrir le dossier des classes maintenant ?",
 
         # --- AnswerKeyDialog ---
         "ak_title": "Corrigé — sélectionner la ou les bonnes réponses",
@@ -440,6 +450,11 @@ TRANSLATIONS = {
         "gen_mode_manual": "Type the list of names now",
         "gen_mode_csv": "I already have a CSV file (number,name,class)",
         "gen_mode_none": "No list yet (just numbers)",
+        "gen_mode_multi": "Generate for several saved classes",
+        "gen_multi_hint": "Select one or more classes (Ctrl/Shift-click for several):",
+        "gen_multi_no_classes": ("No class saved yet. Save a class first (Data Management tab, or the "
+                                  "\"Save this class to memory\" button)."),
+        "gen_multi_select_required": "Select at least one class from the list.",
         "gen_manual_names_hint": "One name per line (the order sets the sheet number):",
         "gen_manual_classe_label": "Class (optional, applied to all):",
         "gen_roster_table_btn": "Student table (view/edit/save)…",
@@ -474,6 +489,10 @@ TRANSLATIONS = {
                                      "(numbers {start} to {end})."),
         "gen_csv_class_line": "\nClass CSV: {path}",
         "gen_open_folder_now": "\n\nOpen the folder now?",
+        "gen_multi_line": "{classe}: {n} sheet(s) → {path}",
+        "gen_multi_line_empty": "{classe}: no student saved, class skipped.",
+        "gen_multi_summary_title": "{n} class(es) processed:\n",
+        "gen_open_classes_folder_now": "\n\nOpen the classes folder now?",
 
         "ak_title": "Answer key — select the correct answer(s)",
         "ak_hint": ("Check the correct answer(s) for each question.\n"
@@ -738,6 +757,11 @@ TRANSLATIONS = {
         "gen_mode_manual": "Namensliste jetzt eingeben",
         "gen_mode_csv": "Ich habe bereits eine CSV-Datei (Nummer,Name,Klasse)",
         "gen_mode_none": "Noch keine Liste (nur Nummern)",
+        "gen_mode_multi": "Für mehrere gespeicherte Klassen erstellen",
+        "gen_multi_hint": "Wähle eine oder mehrere Klassen aus (Strg/Umschalt-Klick für mehrere):",
+        "gen_multi_no_classes": ("Noch keine Klasse gespeichert. Speichere zuerst eine Klasse (Registerkarte "
+                                  "Datenverwaltung oder Schaltfläche „Diese Klasse im Speicher sichern“)."),
+        "gen_multi_select_required": "Wähle mindestens eine Klasse aus der Liste.",
         "gen_manual_names_hint": "Ein Name pro Zeile (die Reihenfolge bestimmt die Bogennummer):",
         "gen_manual_classe_label": "Klasse (optional, für alle übernommen):",
         "gen_roster_table_btn": "Schülertabelle (ansehen/bearbeiten/speichern)…",
@@ -772,6 +796,10 @@ TRANSLATIONS = {
                                      "(Nummern {start} bis {end})."),
         "gen_csv_class_line": "\nKlassen-CSV: {path}",
         "gen_open_folder_now": "\n\nOrdner jetzt öffnen?",
+        "gen_multi_line": "{classe}: {n} Bogen/Bögen → {path}",
+        "gen_multi_line_empty": "{classe}: kein Schüler gespeichert, Klasse übersprungen.",
+        "gen_multi_summary_title": "{n} Klasse(n) bearbeitet:\n",
+        "gen_open_classes_folder_now": "\n\nKlassenordner jetzt öffnen?",
 
         "ak_title": "Lösung — richtige Antwort(en) auswählen",
         "ak_hint": ("Kreuze für jede Frage die richtige(n) Antwort(en) an.\n"
@@ -1036,6 +1064,11 @@ TRANSLATIONS = {
         "gen_mode_manual": "Escribir la lista de nombres ahora",
         "gen_mode_csv": "Ya tengo un archivo CSV (numero,nombre,clase)",
         "gen_mode_none": "Sin lista por ahora (solo números)",
+        "gen_mode_multi": "Generar para varias clases guardadas",
+        "gen_multi_hint": "Elige una o varias clases (Ctrl/Mayús-clic para varias):",
+        "gen_multi_no_classes": ("Todavía no hay ninguna clase guardada. Guarda primero una clase (pestaña "
+                                  "Gestión de datos, o el botón «Guardar esta clase en memoria»)."),
+        "gen_multi_select_required": "Elige al menos una clase de la lista.",
         "gen_manual_names_hint": "Un nombre por línea (el orden determina el número de hoja):",
         "gen_manual_classe_label": "Clase (opcional, aplicada a todos):",
         "gen_roster_table_btn": "Tabla de alumnos (ver/editar/memoria)…",
@@ -1070,6 +1103,10 @@ TRANSLATIONS = {
                                      "preimpresos (números {start} a {end})."),
         "gen_csv_class_line": "\nCSV de clase: {path}",
         "gen_open_folder_now": "\n\n¿Abrir la carpeta ahora?",
+        "gen_multi_line": "{classe}: {n} hoja(s) → {path}",
+        "gen_multi_line_empty": "{classe}: sin alumnos guardados, clase omitida.",
+        "gen_multi_summary_title": "{n} clase(s) procesada(s):\n",
+        "gen_open_classes_folder_now": "\n\n¿Abrir la carpeta de clases ahora?",
 
         "ak_title": "Solución — selecciona la(s) respuesta(s) correcta(s)",
         "ak_hint": ("Marca la(s) respuesta(s) correcta(s) para cada pregunta.\n"
