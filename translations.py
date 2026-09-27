@@ -333,6 +333,8 @@ TRANSLATIONS = {
         "data_class_label": "Classe :",
         "data_no_class": ("Aucune classe archivée pour l'instant. Lance une correction (onglet Scanner / "
                            "Corriger) pour commencer à constituer les données d'une classe."),
+        "data_new_class_open_btn": "Nouvelle classe",
+        "data_new_class_dialog_title": "Nouvelle classe",
         "data_new_class_group": "Créer une nouvelle classe",
         "data_new_class_names_hint": "Un nom par ligne (l'ordre donne le numéro d'élève) :",
         "data_new_class_classe_label": "Nom de la classe :",
@@ -650,6 +652,8 @@ TRANSLATIONS = {
         "data_class_label": "Class:",
         "data_no_class": ("No class archived yet. Run a grading (Scan / Grade tab) to start building up a "
                            "class's data."),
+        "data_new_class_open_btn": "New class",
+        "data_new_class_dialog_title": "New class",
         "data_new_class_group": "Create a new class",
         "data_new_class_names_hint": "One name per line (the order sets the student number):",
         "data_new_class_classe_label": "Class name:",
@@ -967,6 +971,8 @@ TRANSLATIONS = {
         "data_class_label": "Klasse:",
         "data_no_class": ("Noch keine Klasse archiviert. Starte eine Korrektur (Registerkarte Scannen / "
                            "Korrigieren), um die Daten einer Klasse aufzubauen."),
+        "data_new_class_open_btn": "Neue Klasse",
+        "data_new_class_dialog_title": "Neue Klasse",
         "data_new_class_group": "Neue Klasse erstellen",
         "data_new_class_names_hint": "Ein Name pro Zeile (die Reihenfolge bestimmt die Schülernummer):",
         "data_new_class_classe_label": "Klassenname:",
@@ -1284,6 +1290,8 @@ TRANSLATIONS = {
         "data_class_label": "Clase:",
         "data_no_class": ("Todavía no hay ninguna clase archivada. Inicia una corrección (pestaña Escanear / "
                            "Corregir) para empezar a construir los datos de una clase."),
+        "data_new_class_open_btn": "Nueva clase",
+        "data_new_class_dialog_title": "Nueva clase",
         "data_new_class_group": "Crear una nueva clase",
         "data_new_class_names_hint": "Un nombre por línea (el orden determina el número de alumno):",
         "data_new_class_classe_label": "Nombre de la clase:",

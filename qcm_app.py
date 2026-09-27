@@ -2430,6 +2430,100 @@ class ScanTab(ScrollableTab):
 
 
 # ---------------------------------------------------------------------
+# Popup to create a new class, either by typing names by hand or by
+# importing a CSV file -- opened from DataTab's "Nouvelle classe" button.
+# Kept as a separate window (rather than inline in the tab) so the
+# "classes" mode of DataTab only ever shows ONE thing: the roster of the
+# class currently selected above.
+# ---------------------------------------------------------------------
+class NewClassDialog(tk.Toplevel):
+    def __init__(self, master, on_created):
+        super().__init__(master)
+        self.on_created = on_created
+        self.title(tr("data_new_class_dialog_title"))
+        self.transient(master)
+
+        new_class_frame = ttk.LabelFrame(self, text=tr("data_new_class_group"), padding=10)
+        new_class_frame.pack(fill="x", padx=10, pady=(10, 6))
+        ttk.Label(new_class_frame, text=tr("data_new_class_names_hint")).pack(anchor="w")
+        self.new_class_names_text = tk.Text(new_class_frame, height=8, width=45)
+        self.new_class_names_text.pack(fill="x", pady=3)
+        new_class_row = ttk.Frame(new_class_frame)
+        new_class_row.pack(fill="x")
+        ttk.Label(new_class_row, text=tr("data_new_class_classe_label")).pack(side="left")
+        self.new_class_classe_var = tk.StringVar()
+        ttk.Entry(new_class_row, textvariable=self.new_class_classe_var, width=15).pack(side="left", padx=5)
+        ttk.Button(new_class_row, text=tr("data_new_class_btn"), command=self._create_class).pack(
+            side="left", padx=5)
+
+        csv_import_frame = ttk.LabelFrame(self, text=tr("data_csv_import_group"), padding=10)
+        csv_import_frame.pack(fill="x", padx=10, pady=(0, 6))
+        ttk.Label(csv_import_frame, text=tr("data_csv_import_hint")).pack(anchor="w")
+        csv_import_row = ttk.Frame(csv_import_frame)
+        csv_import_row.pack(fill="x", pady=3)
+        self.import_csv_path_var = tk.StringVar(value="")
+        ttk.Entry(csv_import_row, textvariable=self.import_csv_path_var, width=40).pack(
+            side="left", fill="x", expand=True)
+        ttk.Button(csv_import_row, text=tr("btn_browse"), command=self._browse_import_csv).pack(
+            side="left", padx=5)
+        ttk.Button(csv_import_frame, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
+            anchor="w", pady=(3, 0))
+
+        btn_row = ttk.Frame(self, padding=10)
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=tr("btn_close"), command=self.destroy).pack(side="right")
+
+        self.grab_set()
+
+    def _create_class(self):
+        raw = self.new_class_names_text.get("1.0", "end").splitlines()
+        names = [n.strip() for n in raw if n.strip()]
+        if not names:
+            messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
+            return
+        classe = self.new_class_classe_var.get().strip()
+        if not classe:
+            messagebox.showwarning(APP_TITLE, tr("data_new_class_name_required"))
+            return
+        if classe in class_archive.list_classes():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=classe)):
+                return
+        roster = {i + 1: {"nom": name, "classe": classe} for i, name in enumerate(names)}
+        class_archive.save_roster(classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=classe, n=len(roster)))
+        self.on_created(classe)
+        self.destroy()
+
+    def _browse_import_csv(self):
+        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
+                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
+        if not path:
+            return
+        try:
+            roster, use_path, message = smart_load_roster_with_export(path)
+        except (OSError, KeyError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
+            return
+        if message:
+            messagebox.showinfo(APP_TITLE, message)
+        self.import_csv_path_var.set(use_path)
+        if not roster:
+            return
+        suggested = suggest_class_name(roster)
+        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"), initialvalue=suggested, parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        if name in class_archive.list_classes():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
+                return
+        class_archive.save_roster(name, roster)
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
+        self.on_created(name)
+        self.destroy()
+
+
+# ---------------------------------------------------------------------
 # Tab 3: reviewing/editing/analyzing the saved per-class archive
 # (class_archive.py) -- roster, and the history of past corrections.
 # ---------------------------------------------------------------------
@@ -2475,37 +2569,16 @@ class DataTab(ScrollableTab):
         self.open_folder_btn = ttk.Button(self.classe_row, text=tr("scan_open_class_folder"),
                                            command=self._open_folder, state="disabled")
         self.open_folder_btn.pack(side="left", padx=5)
+        ttk.Button(self.classe_row, text=tr("data_new_class_open_btn"), command=self._open_new_class_dialog).pack(
+            side="left", padx=5)
 
         self.summary_label = ttk.Label(self.body, text="", foreground="#333333", wraplength=760, justify="left")
 
         # --- Mode : listes d'élèves (classes) ---
+        # Creer une classe (a la main ou depuis un CSV) se fait dans une
+        # fenetre separee (voir NewClassDialog / _open_new_class_dialog) --
+        # ce cadre n'affiche que la liste de la classe SELECTIONNEE ci-dessus.
         self.classes_mode_frame = ttk.Frame(self.body)
-
-        new_class_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_new_class_group"), padding=10)
-        new_class_frame.pack(fill="x", pady=(0, 8))
-        ttk.Label(new_class_frame, text=tr("data_new_class_names_hint")).pack(anchor="w")
-        self.new_class_names_text = tk.Text(new_class_frame, height=6, width=45)
-        self.new_class_names_text.pack(fill="x", pady=3)
-        new_class_row = ttk.Frame(new_class_frame)
-        new_class_row.pack(fill="x")
-        ttk.Label(new_class_row, text=tr("data_new_class_classe_label")).pack(side="left")
-        self.new_class_classe_var = tk.StringVar()
-        ttk.Entry(new_class_row, textvariable=self.new_class_classe_var, width=15).pack(side="left", padx=5)
-        ttk.Button(new_class_row, text=tr("data_new_class_btn"), command=self._create_class).pack(
-            side="left", padx=5)
-
-        csv_import_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_csv_import_group"), padding=10)
-        csv_import_frame.pack(fill="x", pady=(0, 8))
-        ttk.Label(csv_import_frame, text=tr("data_csv_import_hint")).pack(anchor="w")
-        csv_import_row = ttk.Frame(csv_import_frame)
-        csv_import_row.pack(fill="x", pady=3)
-        self.import_csv_path_var = tk.StringVar(value="")
-        ttk.Entry(csv_import_row, textvariable=self.import_csv_path_var, width=40).pack(
-            side="left", fill="x", expand=True)
-        ttk.Button(csv_import_row, text=tr("btn_browse"), command=self._browse_import_csv).pack(
-            side="left", padx=5)
-        ttk.Button(csv_import_frame, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
-            anchor="w", pady=(3, 0))
 
         roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True)
@@ -2596,52 +2669,8 @@ class DataTab(ScrollableTab):
             self.classe_combo.current(0)
         self._load_classe()
 
-    def _create_class(self):
-        raw = self.new_class_names_text.get("1.0", "end").splitlines()
-        names = [n.strip() for n in raw if n.strip()]
-        if not names:
-            messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
-            return
-        classe = self.new_class_classe_var.get().strip()
-        if not classe:
-            messagebox.showwarning(APP_TITLE, tr("data_new_class_name_required"))
-            return
-        if classe in class_archive.list_classes():
-            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=classe)):
-                return
-        roster = {i + 1: {"nom": name, "classe": classe} for i, name in enumerate(names)}
-        class_archive.save_roster(classe, roster)
-        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=classe, n=len(roster)))
-        self.new_class_names_text.delete("1.0", "end")
-        self.new_class_classe_var.set("")
-        self._refresh_classes(select=classe)
-
-    def _browse_import_csv(self):
-        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
-                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
-        if not path:
-            return
-        try:
-            roster, use_path, message = smart_load_roster_with_export(path)
-        except (OSError, KeyError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
-            return
-        if message:
-            messagebox.showinfo(APP_TITLE, message)
-        self.import_csv_path_var.set(use_path)
-        if not roster:
-            return
-        suggested = suggest_class_name(roster)
-        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"), initialvalue=suggested, parent=self)
-        if not name or not name.strip():
-            return
-        name = name.strip()
-        if name in class_archive.list_classes():
-            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
-                return
-        class_archive.save_roster(name, roster)
-        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
-        self._refresh_classes(select=name)
+    def _open_new_class_dialog(self):
+        NewClassDialog(self, on_created=lambda classe: self._refresh_classes(select=classe))
 
     def _load_classe(self):
         classe = self.classe_var.get()
