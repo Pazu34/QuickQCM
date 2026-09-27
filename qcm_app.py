@@ -496,6 +496,43 @@ def offer_csv_template(parent):
     return path
 
 
+def build_data_dir_section(parent, on_reload):
+    """Shared "Dossier de donnees" block (current path + change/reset
+    buttons), identical in DataTab and PreferencesTab. The override
+    itself lives in a small pointer file next to the executable, not
+    inside the data folder (see app_config.set_data_dir_override) --
+    switching it re-reads EVERYTHING from the new location (settings,
+    classes, corrections, corriges) via `on_reload`, which fully rebuilds
+    the app's tabs from scratch (see qcm_app.main)."""
+    frame = ttk.LabelFrame(parent, text=tr("prefs_data_dir_group"), padding=10)
+    ttk.Label(frame, text=app_config.get_config_dir(), foreground="#555555",
+              wraplength=700, justify="left").pack(anchor="w")
+    btn_row = ttk.Frame(frame)
+    btn_row.pack(fill="x", pady=(6, 0))
+
+    def _change():
+        chosen = filedialog.askdirectory(title=tr("prefs_choose_data_dir"), parent=parent)
+        if not chosen:
+            return
+        if not app_config.dir_is_usable(chosen):
+            messagebox.showerror(APP_TITLE, tr("prefs_data_dir_change_error", detail=chosen))
+            return
+        app_config.set_data_dir_override(chosen)
+        on_reload()
+
+    def _reset():
+        if not app_config.load_data_dir_override():
+            messagebox.showinfo(APP_TITLE, tr("prefs_reset_data_dir_already_default"))
+            return
+        if messagebox.askyesno(APP_TITLE, tr("prefs_reset_data_dir_confirm")):
+            app_config.clear_data_dir_override()
+            on_reload()
+
+    ttk.Button(btn_row, text=tr("prefs_change_data_dir_btn"), command=_change).pack(side="left")
+    ttk.Button(btn_row, text=tr("prefs_reset_data_dir_btn"), command=_reset).pack(side="left", padx=5)
+    return frame
+
+
 def cv2_to_photoimage(bgr_image, max_w=520, max_h=None):
     import cv2
     rgb = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
@@ -589,12 +626,11 @@ class ScrollableTab(ttk.Frame):
 # Tab 1: answer sheet generation
 # ---------------------------------------------------------------------
 class GenerateTab(ScrollableTab):
-    def __init__(self, master):
+    def __init__(self, master, on_manage_classes):
         super().__init__(master)
         self.settings = app_config.load_settings()
         self.roster_mode = tk.StringVar(value="manuel")
-        self.csv_path = tk.StringVar(value="")
-        self.loaded_csv_roster = None  # {numero: {"nom":..., "classe":...}}
+        self.on_manage_classes = on_manage_classes
         self._build_ui()
 
     def _build_ui(self):
@@ -647,7 +683,6 @@ class GenerateTab(ScrollableTab):
 
         modes = [
             ("manuel", tr("gen_mode_manual")),
-            ("csv", tr("gen_mode_csv")),
             ("aucun", tr("gen_mode_none")),
             ("multi", tr("gen_mode_multi")),
         ]
@@ -656,15 +691,11 @@ class GenerateTab(ScrollableTab):
             mode_row.pack(fill="x", anchor="w")
             ttk.Radiobutton(mode_row, text=label, variable=self.roster_mode, value=value,
                             command=self._on_roster_mode_change).pack(side="left", anchor="w")
-            if value == "csv":
-                ttk.Button(mode_row, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
-                    side="left", padx=10)
 
-        # Toujours visible, quel que soit le mode choisi ci-dessus -- charger
-        # une classe enregistree en memoire bascule automatiquement sur le
-        # mode "csv" (une classe chargee est un tableau numero/nom/classe
-        # complet, traite comme le serait un CSV).
-        ttk.Button(roster_frame, text=tr("gen_roster_table_btn"), command=self._open_roster_manager).pack(
+        # Toujours visible, quel que soit le mode choisi ci-dessus -- la
+        # gestion des classes (creation, import CSV, tableau eleves...) se
+        # fait entierement dans l'onglet Gestion des donnees desormais.
+        ttk.Button(roster_frame, text=tr("gen_manage_classes_btn"), command=self.on_manage_classes).pack(
             anchor="w", pady=(4, 8))
 
         self.manual_frame = ttk.Frame(roster_frame)
@@ -678,18 +709,6 @@ class GenerateTab(ScrollableTab):
         ttk.Entry(classe_row, textvariable=self.manual_classe_var, width=15).pack(side="left", padx=5)
         ttk.Button(classe_row, text=tr("gen_save_class_btn"), command=self._save_manual_class_to_memory).pack(
             side="left", padx=5)
-
-        self.csv_frame = ttk.Frame(roster_frame)
-        csv_row = ttk.Frame(self.csv_frame)
-        csv_row.pack(fill="x", pady=3)
-        ttk.Entry(csv_row, textvariable=self.csv_path, width=40).pack(side="left", fill="x", expand=True)
-        ttk.Button(csv_row, text=tr("btn_browse"), command=self._browse_csv).pack(side="left", padx=5)
-        csv_row2 = ttk.Frame(self.csv_frame)
-        csv_row2.pack(fill="x", pady=(0, 3))
-        ttk.Button(csv_row2, text=tr("gen_save_class_btn"),
-                   command=self._save_class_to_memory).pack(side="left")
-        self.csv_info_label = ttk.Label(self.csv_frame, text="", foreground="#555555")
-        self.csv_info_label.pack(anchor="w")
 
         self.aucun_frame = ttk.Frame(roster_frame)
         n_row = ttk.Frame(self.aucun_frame)
@@ -771,13 +790,11 @@ class GenerateTab(ScrollableTab):
             self.extra_blank_frame.pack_forget()
 
     def _on_roster_mode_change(self):
-        for f in (self.manual_frame, self.csv_frame, self.aucun_frame, self.multi_frame):
+        for f in (self.manual_frame, self.aucun_frame, self.multi_frame):
             f.pack_forget()
         mode = self.roster_mode.get()
         if mode == "manuel":
             self.manual_frame.pack(fill="x", pady=(6, 0))
-        elif mode == "csv":
-            self.csv_frame.pack(fill="x", pady=(6, 0))
         elif mode == "multi":
             self.multi_frame.pack(fill="x", pady=(6, 0))
             self._refresh_multi_classes_list()
@@ -791,38 +808,6 @@ class GenerateTab(ScrollableTab):
             self.multi_classes_list.insert("end", name)
             if name in selected:
                 self.multi_classes_list.selection_set("end")
-
-    def _browse_csv(self):
-        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
-                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
-        if not path:
-            return
-        try:
-            roster, use_path, message = smart_load_roster_with_export(path)
-        except (OSError, KeyError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
-            return
-        if message:
-            messagebox.showinfo(APP_TITLE, message)
-        self.csv_path.set(use_path)
-        self.loaded_csv_roster = roster
-        self.csv_info_label.config(text=tr("csv_loaded_with_range", n=len(roster), min=min(roster), max=max(roster)))
-
-    def _open_roster_manager(self):
-        def on_apply(roster, name):
-            self.loaded_csv_roster = roster
-            self.csv_path.set(tr("csv_path_from_memory", name=name) if name else tr("csv_path_manual_edit"))
-            self.csv_info_label.config(text=tr("csv_loaded_with_range", n=len(roster), min=min(roster), max=max(roster)))
-            self.roster_mode.set("csv")
-            self._on_roster_mode_change()
-
-        RosterManagerDialog(self, initial_roster=self.loaded_csv_roster,
-                             initial_name=suggest_class_name(self.loaded_csv_roster) if self.loaded_csv_roster
-                             else None,
-                             on_apply=on_apply)
-
-    def _save_class_to_memory(self):
-        self._save_roster_to_memory(self.loaded_csv_roster)
 
     def _save_manual_class_to_memory(self):
         raw = self.names_text.get("1.0", "end").splitlines()
@@ -916,7 +901,7 @@ class GenerateTab(ScrollableTab):
             self._on_generate_multi(cfg)
             return
 
-        names, classe_for_all, numbers_from_csv, roster_rows = None, "", None, None
+        names, classe_for_all = None, ""
         if mode == "manuel":
             raw = self.names_text.get("1.0", "end").splitlines()
             names = [n.strip() for n in raw if n.strip()]
@@ -924,19 +909,8 @@ class GenerateTab(ScrollableTab):
                 messagebox.showwarning(APP_TITLE, tr("gen_names_required"))
                 return
             classe_for_all = self.manual_classe_var.get().strip()
-        elif mode == "csv":
-            if not self.loaded_csv_roster:
-                messagebox.showwarning(APP_TITLE, tr("gen_csv_required"))
-                return
-            roster_rows = self.loaded_csv_roster
-            numbers_from_csv = sorted(roster_rows.keys())
 
-        if mode == "manuel":
-            classe_effective = classe_for_all or None
-        elif mode == "csv":
-            classe_effective = suggest_class_name(roster_rows) or None
-        else:
-            classe_effective = None
+        classe_effective = classe_for_all or None if mode == "manuel" else None
 
         # Une classe identifiee -> range le PDF avec les autres donnees de
         # cette classe (Donnees/Classes/<classe>/) plutot que dans le
@@ -987,18 +961,6 @@ class GenerateTab(ScrollableTab):
                     w.writerow(["numero", "nom", "classe"])
                     for num, name in zip(generated_numbers, names):
                         w.writerow([num, name, classe_for_all])
-            elif mode == "csv":
-                identities = None
-                if print_name or print_classe:
-                    identities = {
-                        num: (roster_rows[num]["nom"] if print_name else None,
-                              roster_rows[num].get("classe") if (print_classe and roster_rows[num].get("classe"))
-                              else None)
-                        for num in numbers_from_csv
-                    }
-                extra_numbers = list(range(max(numbers_from_csv) + 1, max(numbers_from_csv) + 1 + n_extra))
-                generated_numbers = numbers_from_csv + extra_numbers
-                build_for_numbers(pdf_path, cfg, generated_numbers, identities=identities)
             else:
                 start_number = int(self.start_number_var.get())
                 n_sheets = int(self.n_sheets_var.get())
@@ -1717,8 +1679,9 @@ class RosterTableEditor(ttk.Frame):
 # Single window to view/edit a numero/nom/classe table, and manage the
 # classes saved to memory -- backed by class_archive.py, the same
 # per-class archive used by DataTab, so a roster saved here is the same
-# one shown/editable there: load, save, rename, delete. Used from both
-# tabs.
+# one shown/editable there: load, save, rename, delete. Used from
+# ScanTab, to pick the roster a batch of scanned copies is matched
+# against (GenerateTab no longer needs it -- see gen_manage_classes_btn).
 # ---------------------------------------------------------------------
 class RosterManagerDialog(tk.Toplevel):
     def __init__(self, master, initial_roster=None, initial_name=None, on_apply=None):
@@ -2478,9 +2441,10 @@ class DataTab(ScrollableTab):
     l'onglet ; le troisième n'en a pas besoin (les corrigés ne sont pas
     liés à une classe en particulier)."""
 
-    def __init__(self, master, on_load_correction):
+    def __init__(self, master, on_load_correction, on_reload):
         super().__init__(master)
         self.on_load_correction = on_load_correction
+        self.on_reload = on_reload
         self.current_classe = None
         self.mode_var = tk.StringVar(value="classes")
         self._build_ui()
@@ -2488,6 +2452,8 @@ class DataTab(ScrollableTab):
         self._refresh_keys()
 
     def _build_ui(self):
+        build_data_dir_section(self.body, self.on_reload).pack(fill="x", pady=(0, 8))
+
         mode_frame = ttk.Frame(self.body)
         mode_frame.pack(fill="x", pady=(0, 8))
         modes = [
@@ -2527,6 +2493,19 @@ class DataTab(ScrollableTab):
         ttk.Entry(new_class_row, textvariable=self.new_class_classe_var, width=15).pack(side="left", padx=5)
         ttk.Button(new_class_row, text=tr("data_new_class_btn"), command=self._create_class).pack(
             side="left", padx=5)
+
+        csv_import_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_csv_import_group"), padding=10)
+        csv_import_frame.pack(fill="x", pady=(0, 8))
+        ttk.Label(csv_import_frame, text=tr("data_csv_import_hint")).pack(anchor="w")
+        csv_import_row = ttk.Frame(csv_import_frame)
+        csv_import_row.pack(fill="x", pady=3)
+        self.import_csv_path_var = tk.StringVar(value="")
+        ttk.Entry(csv_import_row, textvariable=self.import_csv_path_var, width=40).pack(
+            side="left", fill="x", expand=True)
+        ttk.Button(csv_import_row, text=tr("btn_browse"), command=self._browse_import_csv).pack(
+            side="left", padx=5)
+        ttk.Button(csv_import_frame, text=tr("btn_create_template"), command=lambda: offer_csv_template(self)).pack(
+            anchor="w", pady=(3, 0))
 
         roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True)
@@ -2636,6 +2615,33 @@ class DataTab(ScrollableTab):
         self.new_class_names_text.delete("1.0", "end")
         self.new_class_classe_var.set("")
         self._refresh_classes(select=classe)
+
+    def _browse_import_csv(self):
+        path = filedialog.askopenfilename(title=tr("csv_choose_file"),
+                                           filetypes=[(tr("file_csv"), "*.csv"), (tr("file_all"), "*.*")])
+        if not path:
+            return
+        try:
+            roster, use_path, message = smart_load_roster_with_export(path)
+        except (OSError, KeyError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, tr("csv_read_error", detail=exc))
+            return
+        if message:
+            messagebox.showinfo(APP_TITLE, message)
+        self.import_csv_path_var.set(use_path)
+        if not roster:
+            return
+        suggested = suggest_class_name(roster)
+        name = simpledialog.askstring(APP_TITLE, tr("gen_ask_class_name"), initialvalue=suggested, parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        if name in class_archive.list_classes():
+            if not messagebox.askyesno(APP_TITLE, tr("gen_class_exists_replace", name=name)):
+                return
+        class_archive.save_roster(name, roster)
+        messagebox.showinfo(APP_TITLE, tr("gen_class_saved", name=name, n=len(roster)))
+        self._refresh_classes(select=name)
 
     def _load_classe(self):
         classe = self.classe_var.get()
@@ -2774,9 +2780,12 @@ class DataTab(ScrollableTab):
 # Tab 4: preferences (language)
 # ---------------------------------------------------------------------
 class PreferencesTab(ScrollableTab):
-    def __init__(self, master, on_language_change):
+    def __init__(self, master, on_language_change, on_reload):
         super().__init__(master)
         self.on_language_change = on_language_change
+        self.on_reload = on_reload
+
+        build_data_dir_section(self.body, self.on_reload).pack(fill="x", pady=(0, 10))
 
         lang_frame = ttk.LabelFrame(self.body, text=tr("prefs_group"), padding=10)
         lang_frame.pack(fill="x", pady=(0, 10))
@@ -2850,6 +2859,16 @@ def main():
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True, padx=12, pady=10)
 
+    def full_reload():
+        """Called after the data folder itself changes (see
+        build_data_dir_section): re-reads everything that depends on its
+        location -- language preference, legacy-storage migrations, then
+        every tab's content -- from the newly chosen folder."""
+        translations.load_language_from_settings()
+        class_archive.migrate_legacy_class_store()
+        answer_key_store.migrate_legacy_store()
+        rebuild_ui()
+
     def rebuild_ui():
         root.title(tr("app_title"))
         title_label.config(text=tr("app_title"))
@@ -2862,10 +2881,18 @@ def main():
             scan_tab._on_archive_loaded(report, classe, run_name)
             notebook.select(scan_tab)
 
-        notebook.add(GenerateTab(notebook), text=tr("tab_generate"))
+        # "Gestion des donnees" en premier et selectionne par defaut : c'est
+        # l'onglet le plus utile juste apres un changement de dossier de
+        # donnees (full_reload), puisqu'il montre directement classes,
+        # corrections et corriges charges depuis le nouvel emplacement.
+        data_tab = DataTab(notebook, on_load_correction=on_load_correction, on_reload=full_reload)
+        notebook.add(data_tab, text=tr("tab_data"))
+        notebook.add(GenerateTab(notebook, on_manage_classes=lambda: notebook.select(data_tab)),
+                     text=tr("tab_generate"))
         notebook.add(scan_tab, text=tr("tab_scan"))
-        notebook.add(DataTab(notebook, on_load_correction=on_load_correction), text=tr("tab_data"))
-        notebook.add(PreferencesTab(notebook, on_language_change=rebuild_ui), text=tr("tab_preferences"))
+        notebook.add(PreferencesTab(notebook, on_language_change=rebuild_ui, on_reload=full_reload),
+                     text=tr("tab_preferences"))
+        notebook.select(data_tab)
 
     rebuild_ui()
     root.mainloop()

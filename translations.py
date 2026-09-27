@@ -80,7 +80,6 @@ TRANSLATIONS = {
         "file_all": "Tous les fichiers",
         "file_images": "Images",
         "file_pdf": "Fichier PDF",
-        "csv_loaded_with_range": "{n} élève(s) chargé(s), numéros {min} à {max}.",
         "csv_loaded_simple": "{n} élève(s) chargé(s).",
         "csv_path_from_memory": "(classe en mémoire : {name})",
         "csv_path_manual_edit": "(tableau modifié manuellement)",
@@ -132,9 +131,8 @@ TRANSLATIONS = {
         "gen_sheet_size": "Taille de la feuille :",
         "gen_students_group": "Élèves",
         "gen_mode_manual": "Saisir la liste des noms maintenant",
-        "gen_mode_csv": "J'ai déjà un fichier CSV (numero,nom,classe)",
         "gen_mode_none": "Pas de liste pour l'instant (juste des numéros)",
-        "gen_mode_multi": "Générer pour plusieurs classes enregistrées",
+        "gen_mode_multi": "Générer pour une ou plusieurs classes enregistrée(s)",
         "gen_multi_hint": "Sélectionne une ou plusieurs classes (Ctrl/Shift-clic pour plusieurs) :",
         "gen_multi_no_classes": ("Aucune classe enregistrée pour l'instant. Enregistre d'abord une classe "
                                   "(onglet Gestion des données, ou bouton « Enregistrer cette classe en "
@@ -143,6 +141,7 @@ TRANSLATIONS = {
         "gen_manual_names_hint": "Un nom par ligne (l'ordre donne le numéro de feuille) :",
         "gen_manual_classe_label": "Classe (facultatif, appliquée à tous) :",
         "gen_roster_table_btn": "Tableau élèves (voir/modifier/mémoire)…",
+        "gen_manage_classes_btn": "Gérer les listes d'élèves",
         "gen_save_class_btn": "Enregistrer cette classe en mémoire",
         "gen_n_sheets_label": "Nombre de feuilles à générer :",
         "gen_start_number_label": "Numéro de départ :",
@@ -164,7 +163,6 @@ TRANSLATIONS = {
         "gen_invalid_config_short": "Configuration invalide : {detail}",
         "gen_preview_failed": "Impossible de générer l'aperçu :\n\n{detail}",
         "gen_names_required": "Merci de saisir au moins un nom, ou choisis une autre option pour la liste d'élèves.",
-        "gen_csv_required": "Merci de choisir un fichier CSV valide.",
         "gen_output_dir_error": "Impossible d'utiliser ce dossier de sortie : {detail}",
         "gen_generating": "Génération en cours…",
         "gen_failed": "Échec de la génération :\n\n{detail}",
@@ -340,6 +338,8 @@ TRANSLATIONS = {
         "data_new_class_classe_label": "Nom de la classe :",
         "data_new_class_btn": "Créer la classe",
         "data_new_class_name_required": "Merci d'indiquer un nom de classe.",
+        "data_csv_import_group": "Importer une classe depuis un CSV",
+        "data_csv_import_hint": "Fichier CSV avec les colonnes numero,nom,classe :",
         "data_roster_group": "Élèves",
         "data_save_roster_btn": "Enregistrer les modifications",
         "data_roster_saved": "Liste des élèves enregistrée ({n} élève(s)).",
@@ -365,6 +365,15 @@ TRANSLATIONS = {
         "data_keys_delete_btn": "Supprimer",
         "data_choose_key_first": "Sélectionne un corrigé dans la liste.",
 
+        # --- Dossier de données (DataTab + Préférences) ---
+        "prefs_data_dir_group": "Dossier de données",
+        "prefs_choose_data_dir": "Choisir le dossier de données",
+        "prefs_change_data_dir_btn": "Changer de dossier…",
+        "prefs_reset_data_dir_btn": "Réinitialiser (dossier par défaut)",
+        "prefs_reset_data_dir_confirm": "Revenir au dossier de données par défaut (à côté de l'application) ?",
+        "prefs_reset_data_dir_already_default": "Le dossier de données par défaut est déjà utilisé.",
+        "prefs_data_dir_change_error": "Impossible d'utiliser ce dossier : {detail}",
+
         # --- Préférences ---
         "prefs_group": "Langue",
         "prefs_language_label": "Langue de l'interface :",
@@ -372,7 +381,7 @@ TRANSLATIONS = {
         "prefs_about_group": "À propos",
         "prefs_about_text": ("QCM Scanner — génération de feuilles-réponses QCM et correction automatique par "
                               "lecture optique.\nDonnées et réglages stockés dans le dossier « Données » à côté "
-                              "de l'exécutable."),
+                              "de l'exécutable par défaut, ou dans le dossier choisi ci-dessus."),
     },
 
     "en": {
@@ -402,7 +411,6 @@ TRANSLATIONS = {
         "file_all": "All files",
         "file_images": "Images",
         "file_pdf": "PDF file",
-        "csv_loaded_with_range": "{n} student(s) loaded, numbers {min} to {max}.",
         "csv_loaded_simple": "{n} student(s) loaded.",
         "csv_path_from_memory": "(class from memory: {name})",
         "csv_path_manual_edit": "(table edited manually)",
@@ -448,9 +456,8 @@ TRANSLATIONS = {
         "gen_sheet_size": "Sheet size:",
         "gen_students_group": "Students",
         "gen_mode_manual": "Type the list of names now",
-        "gen_mode_csv": "I already have a CSV file (number,name,class)",
         "gen_mode_none": "No list yet (just numbers)",
-        "gen_mode_multi": "Generate for several saved classes",
+        "gen_mode_multi": "Generate for one or more saved classes",
         "gen_multi_hint": "Select one or more classes (Ctrl/Shift-click for several):",
         "gen_multi_no_classes": ("No class saved yet. Save a class first (Data Management tab, or the "
                                   "\"Save this class to memory\" button)."),
@@ -458,6 +465,7 @@ TRANSLATIONS = {
         "gen_manual_names_hint": "One name per line (the order sets the sheet number):",
         "gen_manual_classe_label": "Class (optional, applied to all):",
         "gen_roster_table_btn": "Student table (view/edit/save)…",
+        "gen_manage_classes_btn": "Manage student lists",
         "gen_save_class_btn": "Save this class to memory",
         "gen_n_sheets_label": "Number of sheets to generate:",
         "gen_start_number_label": "Starting number:",
@@ -479,7 +487,6 @@ TRANSLATIONS = {
         "gen_invalid_config_short": "Invalid configuration: {detail}",
         "gen_preview_failed": "Couldn't generate the preview:\n\n{detail}",
         "gen_names_required": "Please type at least one name, or choose another option for the student list.",
-        "gen_csv_required": "Please choose a valid CSV file.",
         "gen_output_dir_error": "Couldn't use this output folder: {detail}",
         "gen_generating": "Generating…",
         "gen_failed": "Generation failed:\n\n{detail}",
@@ -648,6 +655,8 @@ TRANSLATIONS = {
         "data_new_class_classe_label": "Class name:",
         "data_new_class_btn": "Create class",
         "data_new_class_name_required": "Please enter a class name.",
+        "data_csv_import_group": "Import a class from a CSV file",
+        "data_csv_import_hint": "CSV file with the columns number,name,class:",
         "data_roster_group": "Students",
         "data_save_roster_btn": "Save changes",
         "data_roster_saved": "Student list saved ({n} student(s)).",
@@ -673,13 +682,23 @@ TRANSLATIONS = {
         "data_keys_delete_btn": "Delete",
         "data_choose_key_first": "Choose an answer key from the list.",
 
+        # --- Data folder (DataTab + Preferences) ---
+        "prefs_data_dir_group": "Data folder",
+        "prefs_choose_data_dir": "Choose the data folder",
+        "prefs_change_data_dir_btn": "Change folder…",
+        "prefs_reset_data_dir_btn": "Reset (default folder)",
+        "prefs_reset_data_dir_confirm": "Go back to the default data folder (next to the application)?",
+        "prefs_reset_data_dir_already_default": "The default data folder is already in use.",
+        "prefs_data_dir_change_error": "Couldn't use this folder: {detail}",
+
         "prefs_group": "Language",
         "prefs_language_label": "Interface language:",
         "prefs_hint": "The language change applies immediately, no need to restart the application.",
         "prefs_about_group": "About",
         "prefs_about_text": ("QCM Scanner — generates multiple-choice answer sheets and grades them "
                               "automatically by optical reading.\nData and settings are stored in the "
-                              "\u00abDonnées\u00bb folder next to the executable."),
+                              "\u00abDonnées\u00bb folder next to the executable by default, or in the "
+                              "folder chosen above."),
     },
 
     "de": {
@@ -709,7 +728,6 @@ TRANSLATIONS = {
         "file_all": "Alle Dateien",
         "file_images": "Bilder",
         "file_pdf": "PDF-Datei",
-        "csv_loaded_with_range": "{n} Schüler geladen, Nummern {min} bis {max}.",
         "csv_loaded_simple": "{n} Schüler geladen.",
         "csv_path_from_memory": "(Klasse aus dem Speicher: {name})",
         "csv_path_manual_edit": "(Tabelle manuell bearbeitet)",
@@ -755,9 +773,8 @@ TRANSLATIONS = {
         "gen_sheet_size": "Bogengröße:",
         "gen_students_group": "Schüler",
         "gen_mode_manual": "Namensliste jetzt eingeben",
-        "gen_mode_csv": "Ich habe bereits eine CSV-Datei (Nummer,Name,Klasse)",
         "gen_mode_none": "Noch keine Liste (nur Nummern)",
-        "gen_mode_multi": "Für mehrere gespeicherte Klassen erstellen",
+        "gen_mode_multi": "Für eine oder mehrere gespeicherte Klassen erstellen",
         "gen_multi_hint": "Wähle eine oder mehrere Klassen aus (Strg/Umschalt-Klick für mehrere):",
         "gen_multi_no_classes": ("Noch keine Klasse gespeichert. Speichere zuerst eine Klasse (Registerkarte "
                                   "Datenverwaltung oder Schaltfläche „Diese Klasse im Speicher sichern“)."),
@@ -765,6 +782,7 @@ TRANSLATIONS = {
         "gen_manual_names_hint": "Ein Name pro Zeile (die Reihenfolge bestimmt die Bogennummer):",
         "gen_manual_classe_label": "Klasse (optional, für alle übernommen):",
         "gen_roster_table_btn": "Schülertabelle (ansehen/bearbeiten/speichern)…",
+        "gen_manage_classes_btn": "Schülerlisten verwalten",
         "gen_save_class_btn": "Diese Klasse im Speicher sichern",
         "gen_n_sheets_label": "Anzahl zu erstellender Bögen:",
         "gen_start_number_label": "Startnummer:",
@@ -786,7 +804,6 @@ TRANSLATIONS = {
         "gen_invalid_config_short": "Ungültige Konfiguration: {detail}",
         "gen_preview_failed": "Vorschau konnte nicht erstellt werden:\n\n{detail}",
         "gen_names_required": "Bitte gib mindestens einen Namen ein oder wähle eine andere Option für die Schülerliste.",
-        "gen_csv_required": "Bitte wähle eine gültige CSV-Datei.",
         "gen_output_dir_error": "Dieser Ausgabeordner konnte nicht verwendet werden: {detail}",
         "gen_generating": "Erstellung läuft…",
         "gen_failed": "Erstellung fehlgeschlagen:\n\n{detail}",
@@ -955,6 +972,8 @@ TRANSLATIONS = {
         "data_new_class_classe_label": "Klassenname:",
         "data_new_class_btn": "Klasse erstellen",
         "data_new_class_name_required": "Bitte gib einen Klassennamen ein.",
+        "data_csv_import_group": "Eine Klasse aus einer CSV-Datei importieren",
+        "data_csv_import_hint": "CSV-Datei mit den Spalten Nummer,Name,Klasse:",
         "data_roster_group": "Schüler",
         "data_save_roster_btn": "Änderungen speichern",
         "data_roster_saved": "Schülerliste gespeichert ({n} Schüler).",
@@ -980,13 +999,22 @@ TRANSLATIONS = {
         "data_keys_delete_btn": "Löschen",
         "data_choose_key_first": "Wähle eine Musterlösung aus der Liste.",
 
+        # --- Datenordner (DataTab + Einstellungen) ---
+        "prefs_data_dir_group": "Datenordner",
+        "prefs_choose_data_dir": "Datenordner auswählen",
+        "prefs_change_data_dir_btn": "Ordner ändern…",
+        "prefs_reset_data_dir_btn": "Zurücksetzen (Standardordner)",
+        "prefs_reset_data_dir_confirm": "Zum Standard-Datenordner zurückkehren (neben der Anwendung)?",
+        "prefs_reset_data_dir_already_default": "Der Standard-Datenordner wird bereits verwendet.",
+        "prefs_data_dir_change_error": "Dieser Ordner konnte nicht verwendet werden: {detail}",
+
         "prefs_group": "Sprache",
         "prefs_language_label": "Sprache der Oberfläche:",
         "prefs_hint": "Der Sprachwechsel wird sofort wirksam, ohne die Anwendung neu zu starten.",
         "prefs_about_group": "Über",
         "prefs_about_text": ("QCM Scanner — erstellt Multiple-Choice-Antwortbögen und korrigiert sie automatisch "
-                              "per optischer Erkennung.\nDaten und Einstellungen werden im Ordner „Données“ neben "
-                              "der ausführbaren Datei gespeichert."),
+                              "per optischer Erkennung.\nDaten und Einstellungen werden standardmäßig im Ordner "
+                              "„Données“ neben der ausführbaren Datei gespeichert, oder im oben gewählten Ordner."),
     },
 
     "es": {
@@ -1016,7 +1044,6 @@ TRANSLATIONS = {
         "file_all": "Todos los archivos",
         "file_images": "Imágenes",
         "file_pdf": "Archivo PDF",
-        "csv_loaded_with_range": "{n} alumno(s) cargado(s), números {min} a {max}.",
         "csv_loaded_simple": "{n} alumno(s) cargado(s).",
         "csv_path_from_memory": "(clase en memoria: {name})",
         "csv_path_manual_edit": "(tabla editada manualmente)",
@@ -1062,9 +1089,8 @@ TRANSLATIONS = {
         "gen_sheet_size": "Tamaño de la hoja:",
         "gen_students_group": "Alumnos",
         "gen_mode_manual": "Escribir la lista de nombres ahora",
-        "gen_mode_csv": "Ya tengo un archivo CSV (numero,nombre,clase)",
         "gen_mode_none": "Sin lista por ahora (solo números)",
-        "gen_mode_multi": "Generar para varias clases guardadas",
+        "gen_mode_multi": "Generar para una o varias clases guardadas",
         "gen_multi_hint": "Elige una o varias clases (Ctrl/Mayús-clic para varias):",
         "gen_multi_no_classes": ("Todavía no hay ninguna clase guardada. Guarda primero una clase (pestaña "
                                   "Gestión de datos, o el botón «Guardar esta clase en memoria»)."),
@@ -1072,6 +1098,7 @@ TRANSLATIONS = {
         "gen_manual_names_hint": "Un nombre por línea (el orden determina el número de hoja):",
         "gen_manual_classe_label": "Clase (opcional, aplicada a todos):",
         "gen_roster_table_btn": "Tabla de alumnos (ver/editar/memoria)…",
+        "gen_manage_classes_btn": "Gestionar las listas de alumnos",
         "gen_save_class_btn": "Guardar esta clase en memoria",
         "gen_n_sheets_label": "Número de hojas a generar:",
         "gen_start_number_label": "Número inicial:",
@@ -1093,7 +1120,6 @@ TRANSLATIONS = {
         "gen_invalid_config_short": "Configuración no válida: {detail}",
         "gen_preview_failed": "No se pudo generar la vista previa:\n\n{detail}",
         "gen_names_required": "Introduce al menos un nombre, o elige otra opción para la lista de alumnos.",
-        "gen_csv_required": "Elige un archivo CSV válido.",
         "gen_output_dir_error": "No se pudo usar esta carpeta de salida: {detail}",
         "gen_generating": "Generando…",
         "gen_failed": "Error al generar:\n\n{detail}",
@@ -1263,6 +1289,8 @@ TRANSLATIONS = {
         "data_new_class_classe_label": "Nombre de la clase:",
         "data_new_class_btn": "Crear la clase",
         "data_new_class_name_required": "Indica un nombre de clase.",
+        "data_csv_import_group": "Importar una clase desde un CSV",
+        "data_csv_import_hint": "Archivo CSV con las columnas numero,nombre,clase:",
         "data_roster_group": "Alumnos",
         "data_save_roster_btn": "Guardar los cambios",
         "data_roster_saved": "Lista de alumnos guardada ({n} alumno(s)).",
@@ -1288,12 +1316,22 @@ TRANSLATIONS = {
         "data_keys_delete_btn": "Eliminar",
         "data_choose_key_first": "Elige una corrección de la lista.",
 
+        # --- Carpeta de datos (DataTab + Preferencias) ---
+        "prefs_data_dir_group": "Carpeta de datos",
+        "prefs_choose_data_dir": "Elegir la carpeta de datos",
+        "prefs_change_data_dir_btn": "Cambiar de carpeta…",
+        "prefs_reset_data_dir_btn": "Restablecer (carpeta predeterminada)",
+        "prefs_reset_data_dir_confirm": "¿Volver a la carpeta de datos predeterminada (junto a la aplicación)?",
+        "prefs_reset_data_dir_already_default": "Ya se está usando la carpeta de datos predeterminada.",
+        "prefs_data_dir_change_error": "No se pudo usar esta carpeta: {detail}",
+
         "prefs_group": "Idioma",
         "prefs_language_label": "Idioma de la interfaz:",
         "prefs_hint": "El cambio de idioma se aplica inmediatamente, sin reiniciar la aplicación.",
         "prefs_about_group": "Acerca de",
         "prefs_about_text": ("QCM Scanner — genera hojas de respuestas de tipo test y las corrige "
-                              "automáticamente mediante lectura óptica.\nLos datos y ajustes se guardan en la "
-                              "carpeta «Données» junto al ejecutable."),
+                              "automáticamente mediante lectura óptica.\nLos datos y ajustes se guardan de forma "
+                              "predeterminada en la carpeta «Données» junto al ejecutable, o en la carpeta "
+                              "elegida arriba."),
     },
 }

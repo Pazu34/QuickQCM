@@ -9,3 +9,4 @@ dist/
 *.spec
 *.zip
 Données/
+data_dir.json
