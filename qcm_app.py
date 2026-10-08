@@ -1680,6 +1680,75 @@ class RosterTableEditor(ttk.Frame):
         return roster, errors
 
 
+class CompactRosterView(ttk.Frame):
+    """Read-only "numero - nom" display of a class's roster, laid out on
+    several columns so a class of 25-30 students fits on screen with
+    little or no scrolling (unlike RosterTableEditor's one-row-per-line
+    grid, meant for editing rather than at-a-glance viewing). Used by
+    ScanTab; editing happens in a separate popup (see RosterEditDialog)
+    opened via its "Modifier la liste" button."""
+
+    def __init__(self, master, height=170, n_columns=2):
+        super().__init__(master)
+        self.n_columns = n_columns
+        self.scroll = ScrollableFrame(self, height=height)
+        self.scroll.pack(fill="both", expand=True)
+        self.load_roster({})
+
+    def load_roster(self, roster):
+        for w in self.scroll.inner.winfo_children():
+            w.destroy()
+        if not roster:
+            ttk.Label(self.scroll.inner, text=tr("scan_roster_empty"),
+                      foreground="#777777").pack(anchor="w", pady=4)
+            return
+        items = sorted(roster.items())
+        n_rows = (len(items) + self.n_columns - 1) // self.n_columns
+        grid = ttk.Frame(self.scroll.inner)
+        grid.pack(fill="x")
+        for i, (num, info) in enumerate(items):
+            col, row = divmod(i, n_rows)
+            text = f"{num} · {info.get('nom', '')}"
+            ttk.Label(grid, text=text).grid(row=row, column=col, sticky="w", padx=(0, 18), pady=1)
+
+
+class RosterEditDialog(tk.Toplevel):
+    """Popup with the full one-row-per-line editable roster grid (see
+    RosterTableEditor) -- opened from ScanTab's compact two-column view
+    (see CompactRosterView) via its "Modifier la liste" button, since
+    editing many rows is awkward in a multi-column layout."""
+
+    def __init__(self, master, classe, roster, on_saved):
+        super().__init__(master)
+        self.classe = classe
+        self.on_saved = on_saved
+        self.title(tr("scan_edit_roster_title", classe=classe))
+        self.transient(master)
+
+        frame = ttk.Frame(self, padding=10)
+        frame.pack(fill="both", expand=True)
+        self.editor = RosterTableEditor(frame, height=320)
+        self.editor.pack(fill="both", expand=True)
+        self.editor.load_roster(roster)
+
+        btn_row = ttk.Frame(self, padding=(10, 0, 10, 10))
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("data_save_roster_btn"), command=self._save).pack(side="right", padx=5)
+
+        self.grab_set()
+
+    def _save(self):
+        roster, errors = self.editor.extract_roster()
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        class_archive.save_roster(self.classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        self.on_saved(roster)
+        self.destroy()
+
+
 class ArchiveBrowserDialog(tk.Toplevel):
     """Lets the teacher pick a class then one of its archived corrections
     (see class_archive.py) and reload it into ScanTab's results window --
@@ -1848,9 +1917,9 @@ class ScanTab(ScrollableTab):
 
         roster_frame = ttk.LabelFrame(class_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True, pady=(8, 0))
-        self.scan_roster_editor = RosterTableEditor(roster_frame, height=180)
-        self.scan_roster_editor.pack(fill="both", expand=True)
-        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_scan_roster).pack(
+        self.scan_roster_view = CompactRosterView(roster_frame, height=170, n_columns=2)
+        self.scan_roster_view.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("scan_edit_roster_btn"), command=self._open_roster_edit_dialog).pack(
             anchor="w", pady=(6, 0))
         self._refresh_scan_classes(select=s.get("scan_last_classe", ""))
 
@@ -1962,7 +2031,7 @@ class ScanTab(ScrollableTab):
         if not classes:
             self.scan_classe_var.set("")
             self.scan_current_classe = None
-            self.scan_roster_editor.clear_rows()
+            self.scan_roster_view.load_roster({})
             self.roster = {}
             return
         if selected in classes:
@@ -1976,18 +2045,17 @@ class ScanTab(ScrollableTab):
         self.scan_current_classe = classe
         roster = class_archive.load_roster(classe)
         self.roster = roster
-        self.scan_roster_editor.load_roster(roster)
+        self.scan_roster_view.load_roster(roster)
 
-    def _save_scan_roster(self):
+    def _open_roster_edit_dialog(self):
         if not self.scan_current_classe:
+            messagebox.showwarning(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        roster, errors = self.scan_roster_editor.extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        class_archive.save_roster(self.scan_current_classe, roster)
+        RosterEditDialog(self, self.scan_current_classe, self.roster, on_saved=self._on_scan_roster_saved)
+
+    def _on_scan_roster_saved(self, roster):
         self.roster = roster
-        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        self.scan_roster_view.load_roster(roster)
 
     def _open_manual_class_dialog(self):
         ManualClassDialog(self, on_created=lambda classe: self._refresh_scan_classes(select=classe))
@@ -2305,7 +2373,7 @@ class ScanTab(ScrollableTab):
         if self.scan_current_classe:
             class_archive.save_roster(self.scan_current_classe, merged)
             self.roster = merged
-            self.scan_roster_editor.load_roster(merged)
+            self.scan_roster_view.load_roster(merged)
             messagebox.showinfo(APP_TITLE, tr("res_csv_updated_classe", name=self.scan_current_classe,
                                                n=len(merged)))
             return
