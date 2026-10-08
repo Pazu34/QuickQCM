@@ -22,6 +22,8 @@ from dataclasses import replace as dataclass_replace
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from PIL import Image, ImageTk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 from generate_sheet_modular import (
     SheetConfig, build, build_batch, draw_sheet, needs_recto_verso, MAX_QUESTIONS,
@@ -31,6 +33,8 @@ import scoring
 import app_config
 import class_archive
 import answer_key_store
+import seed_data
+import stats_view
 import translations
 from translations import tr
 
@@ -2265,7 +2269,7 @@ class ScanTab(ScrollableTab):
                 class_archive.save_roster(classe_name, roster_snapshot)
             headers, rows = build_results_csv_rows(report, out_of_20)
             class_archive.save_results(classe_name, run_name, headers, rows)
-            class_archive.save_report_json(classe_name, run_name, report)
+            class_archive.save_report_json(classe_name, run_name, report, answer_key=self.answer_key)
             if save_copies_wanted:
                 class_archive.save_copies(classe_name, run_name, report)
 
@@ -2525,6 +2529,7 @@ class DataTab(ScrollableTab):
             ("classes", tr("data_mode_classes")),
             ("corrections", tr("data_mode_corrections")),
             ("keys", tr("data_mode_keys")),
+            ("stats", tr("data_mode_stats")),
         ]
         for value, label in modes:
             ttk.Radiobutton(sidebar, text=label, variable=self.mode_var, value=value,
@@ -2605,6 +2610,10 @@ class DataTab(ScrollableTab):
         ttk.Button(keys_btn_row, text=tr("data_keys_delete_btn"), command=self._delete_selected_key).pack(
             side="left", padx=5)
 
+        # --- Mode : statistiques ---
+        self.stats_mode_frame = ttk.Frame(content)
+        self._build_stats_ui(self.stats_mode_frame)
+
         self._on_mode_change()
 
     def _on_mode_change(self):
@@ -2614,6 +2623,7 @@ class DataTab(ScrollableTab):
         self.classes_mode_frame.pack_forget()
         self.corrections_mode_frame.pack_forget()
         self.keys_mode_frame.pack_forget()
+        self.stats_mode_frame.pack_forget()
         if mode == "classes":
             self.classe_row.pack(fill="x")
             self.summary_label.pack(fill="x", pady=(8, 8))
@@ -2622,9 +2632,12 @@ class DataTab(ScrollableTab):
             self.classe_row.pack(fill="x")
             self.summary_label.pack(fill="x", pady=(8, 8))
             self.corrections_mode_frame.pack(fill="both", expand=True)
-        else:
+        elif mode == "keys":
             self.keys_mode_frame.pack(fill="both", expand=True)
             self._refresh_keys()
+        else:
+            self.stats_mode_frame.pack(fill="both", expand=True)
+            self._refresh_stats_list()
 
     # -- Classes -----------------------------------------------------
     def _refresh_classes(self, select=None):
@@ -2782,6 +2795,124 @@ class DataTab(ScrollableTab):
             answer_key_store.delete_key(name)
             self._refresh_keys()
 
+    # -- Statistiques --------------------------------------------------
+    def _build_stats_ui(self, parent):
+        sel_frame = ttk.LabelFrame(parent, text=tr("stats_selection_group"), padding=10)
+        sel_frame.pack(fill="x", pady=(0, 8))
+
+        columns = ("classe", "correction", "date")
+        self.stats_tree = ttk.Treeview(sel_frame, columns=columns, show="headings", height=6,
+                                        selectmode="extended")
+        for col, label, width in [("classe", tr("stats_col_classe"), 140),
+                                   ("correction", tr("data_col_correction"), 220),
+                                   ("date", tr("data_col_date"), 130)]:
+            self.stats_tree.heading(col, text=label)
+            self.stats_tree.column(col, width=width, anchor="w")
+        self.stats_tree.pack(fill="x")
+
+        stats_btn_row = ttk.Frame(sel_frame)
+        stats_btn_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(stats_btn_row, text=tr("btn_refresh"), command=self._refresh_stats_list).pack(side="left")
+        ttk.Button(stats_btn_row, text=tr("stats_show_btn"), command=self._on_show_stats).pack(
+            side="left", padx=5)
+        ttk.Label(sel_frame, text=tr("stats_select_hint"), foreground="#777777",
+                  wraplength=600, justify="left").pack(anchor="w", pady=(6, 0))
+
+        charts_notebook = ttk.Notebook(parent)
+        charts_notebook.pack(fill="both", expand=True, pady=(8, 0))
+
+        self._stats_figures = {}
+        for key, title_key in [("class", "stats_tab_class"), ("qcm", "stats_tab_qcm"),
+                                ("question", "stats_tab_question"), ("student", "stats_tab_student")]:
+            tab = ttk.Frame(charts_notebook)
+            charts_notebook.add(tab, text=tr(title_key))
+            fig = Figure(figsize=(6, 4), dpi=90)
+            canvas = FigureCanvasTkAgg(fig, master=tab)
+            canvas.get_tk_widget().pack(fill="both", expand=True)
+            self._stats_figures[key] = (fig, canvas)
+
+        self._draw_empty_stats()
+
+    def _refresh_stats_list(self):
+        self.stats_tree.delete(*self.stats_tree.get_children())
+        for classe, run_name in stats_view.list_all_corrections():
+            stats = class_archive.correction_stats(classe, run_name) or {}
+            iid = f"{classe}\x1f{run_name}"
+            self.stats_tree.insert("", "end", iid=iid, values=(classe, run_name, stats.get("date", "")))
+
+    def _on_show_stats(self):
+        sel = self.stats_tree.selection()
+        if not sel:
+            messagebox.showwarning(APP_TITLE, tr("stats_no_selection"))
+            return
+        selection = [tuple(iid.split("\x1f", 1)) for iid in sel]
+        loaded = stats_view.load_selection(selection)
+        self._draw_stats_class(stats_view.per_class(loaded))
+        self._draw_stats_qcm(stats_view.per_qcm(loaded))
+        self._draw_stats_question(stats_view.per_question(loaded))
+        self._draw_stats_student(stats_view.per_student(loaded))
+
+    def _draw_empty_stats(self):
+        self._redraw_bar("class", [], [], tr("stats_ylabel_note"), empty_text=tr("stats_no_selection"))
+        self._redraw_bar("qcm", [], [], tr("stats_ylabel_note"), empty_text=tr("stats_no_selection"))
+        self._redraw_bar("question", [], [], tr("stats_ylabel_success"), empty_text=tr("stats_no_selection"))
+        self._redraw_bar("student", [], [], tr("stats_ylabel_note"), empty_text=tr("stats_no_selection"))
+
+    def _draw_stats_class(self, data):
+        labels = sorted(data.keys())
+        values = [stats_view.average(data[l]) for l in labels]
+        self._redraw_bar("class", labels, values, tr("stats_ylabel_note"), vmax=20)
+
+    def _draw_stats_qcm(self, data):
+        labels = list(data.keys())
+        values = [stats_view.average(data[l]) for l in labels]
+        self._redraw_bar("qcm", labels, values, tr("stats_ylabel_note"), vmax=20)
+
+    def _draw_stats_question(self, totals):
+        if not totals:
+            self._redraw_bar("question", [], [], tr("stats_ylabel_success"),
+                              empty_text=tr("stats_no_answer_key"))
+            return
+        qnums = sorted(totals.keys())
+        labels = [f"{tr('stats_question_prefix')}{q}" for q in qnums]
+        values = [100.0 * totals[q][0] / totals[q][1] if totals[q][1] else 0.0 for q in qnums]
+        colors = ["#2e7d32" if v >= 80 else "#c62828" if v <= 20 else "#1976d2" for v in values]
+        self._redraw_bar("question", labels, values, tr("stats_ylabel_success"), colors=colors, vmax=100)
+
+    def _draw_stats_student(self, data):
+        items = sorted(data.items(), key=lambda kv: stats_view.average(kv[1]))
+        labels = [name for name, _ in items]
+        values = [stats_view.average(notes) for _, notes in items]
+        self._redraw_bar("student", labels, values, tr("stats_ylabel_note"), horizontal=True, vmax=20)
+
+    def _redraw_bar(self, key, labels, values, axis_label, horizontal=False, colors=None,
+                     empty_text=None, vmax=None):
+        fig, canvas = self._stats_figures[key]
+        fig.clf()
+        ax = fig.add_subplot(111)
+        if not labels:
+            ax.text(0.5, 0.5, empty_text, ha="center", va="center", transform=ax.transAxes,
+                     color="#777777", wrap=True, fontsize=10)
+            ax.axis("off")
+        elif horizontal:
+            ax.barh(labels, values, color=colors or "#1976d2")
+            ax.set_xlabel(axis_label)
+            ax.invert_yaxis()
+            if vmax:
+                ax.set_xlim(0, vmax)
+            fig.tight_layout()
+        else:
+            ax.bar(labels, values, color=colors or "#1976d2")
+            ax.set_ylabel(axis_label)
+            if vmax:
+                ax.set_ylim(0, vmax)
+            if len(labels) > 5:
+                for lbl in ax.get_xticklabels():
+                    lbl.set_rotation(30)
+                    lbl.set_ha("right")
+            fig.tight_layout()
+        canvas.draw()
+
 
 # ---------------------------------------------------------------------
 # Tab 4: preferences (language)
@@ -2846,6 +2977,7 @@ def main():
     translations.load_language_from_settings()
     class_archive.migrate_legacy_class_store()
     answer_key_store.migrate_legacy_store()
+    seed_data.ensure_test_dataset()
     root = tk.Tk()
     _size_window_to_screen(root)
 
@@ -2874,6 +3006,7 @@ def main():
         translations.load_language_from_settings()
         class_archive.migrate_legacy_class_store()
         answer_key_store.migrate_legacy_store()
+        seed_data.ensure_test_dataset()
         rebuild_ui()
 
     def rebuild_ui():

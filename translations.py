@@ -322,6 +322,7 @@ TRANSLATIONS = {
         "data_mode_classes": "Listes d'élèves (classes)",
         "data_mode_corrections": "Corrections enregistrées",
         "data_mode_keys": "Corrigés et barèmes de QCM",
+        "data_mode_stats": "Statistiques",
         "data_class_label": "Classe :",
         "data_no_class": ("Aucune classe archivée pour l'instant. Lance une correction (onglet Scanner / "
                            "Corriger) pour commencer à constituer les données d'une classe."),
@@ -358,6 +359,24 @@ TRANSLATIONS = {
         "data_keys_rename_btn": "Renommer",
         "data_keys_delete_btn": "Supprimer",
         "data_choose_key_first": "Sélectionne un corrigé dans la liste.",
+
+        # --- DataTab : Statistiques ---
+        "stats_selection_group": "Corrections à analyser",
+        "stats_col_classe": "Classe",
+        "stats_select_hint": ("Sélectionne une ou plusieurs corrections ci-dessus (Ctrl/Maj pour une sélection "
+                               "multiple), puis clique sur « Afficher les statistiques »."),
+        "stats_show_btn": "Afficher les statistiques",
+        "stats_no_selection": "Choisis d'abord au moins une correction dans la liste ci-dessus.",
+        "stats_no_data": "Aucune correction archivée pour l'instant.",
+        "stats_tab_class": "Par classe",
+        "stats_tab_qcm": "Par QCM",
+        "stats_tab_question": "Par question",
+        "stats_tab_student": "Par élève",
+        "stats_ylabel_note": "Note moyenne (/20)",
+        "stats_ylabel_success": "Taux de réussite (%)",
+        "stats_question_prefix": "Q",
+        "stats_no_answer_key": ("Aucun corrigé n'est archivé avec la ou les corrections sélectionnées : "
+                                 "impossible de savoir quelle était la bonne réponse à chaque question."),
 
         # --- Dossier de données (DataTab + Préférences) ---
         "prefs_data_dir_group": "Dossier de données",
@@ -633,6 +652,7 @@ TRANSLATIONS = {
         "data_mode_classes": "Student lists (classes)",
         "data_mode_corrections": "Saved corrections",
         "data_mode_keys": "Quiz answer keys and grading scales",
+        "data_mode_stats": "Statistics",
         "data_class_label": "Class:",
         "data_no_class": ("No class archived yet. Run a grading (Scan / Grade tab) to start building up a "
                            "class's data."),
@@ -669,6 +689,24 @@ TRANSLATIONS = {
         "data_keys_rename_btn": "Rename",
         "data_keys_delete_btn": "Delete",
         "data_choose_key_first": "Choose an answer key from the list.",
+
+        # --- DataTab: Statistics ---
+        "stats_selection_group": "Corrections to analyze",
+        "stats_col_classe": "Class",
+        "stats_select_hint": ("Select one or more corrections above (Ctrl/Shift for a multiple selection), "
+                               "then click \"Show statistics\"."),
+        "stats_show_btn": "Show statistics",
+        "stats_no_selection": "Choose at least one correction from the list above first.",
+        "stats_no_data": "No correction archived yet.",
+        "stats_tab_class": "By class",
+        "stats_tab_qcm": "By quiz",
+        "stats_tab_question": "By question",
+        "stats_tab_student": "By student",
+        "stats_ylabel_note": "Average grade (/20)",
+        "stats_ylabel_success": "Success rate (%)",
+        "stats_question_prefix": "Q",
+        "stats_no_answer_key": ("No answer key is archived with the selected correction(s): there's no way to "
+                                 "know what the correct answer was for each question."),
 
         # --- Data folder (DataTab + Preferences) ---
         "prefs_data_dir_group": "Data folder",
@@ -944,6 +982,7 @@ TRANSLATIONS = {
         "data_mode_classes": "Schülerlisten (Klassen)",
         "data_mode_corrections": "Gespeicherte Korrekturen",
         "data_mode_keys": "Musterlösungen und Bewertungsschemata",
+        "data_mode_stats": "Statistiken",
         "data_class_label": "Klasse:",
         "data_no_class": ("Noch keine Klasse archiviert. Starte eine Korrektur (Registerkarte Scannen / "
                            "Korrigieren), um die Daten einer Klasse aufzubauen."),
@@ -980,6 +1019,24 @@ TRANSLATIONS = {
         "data_keys_rename_btn": "Umbenennen",
         "data_keys_delete_btn": "Löschen",
         "data_choose_key_first": "Wähle eine Musterlösung aus der Liste.",
+
+        # --- DataTab: Statistiken ---
+        "stats_selection_group": "Zu analysierende Korrekturen",
+        "stats_col_classe": "Klasse",
+        "stats_select_hint": ("Wähle oben eine oder mehrere Korrekturen aus (Strg/Umschalt für eine "
+                               "Mehrfachauswahl) und klicke dann auf „Statistiken anzeigen“."),
+        "stats_show_btn": "Statistiken anzeigen",
+        "stats_no_selection": "Wähle zuerst mindestens eine Korrektur aus der Liste oben.",
+        "stats_no_data": "Noch keine Korrektur archiviert.",
+        "stats_tab_class": "Nach Klasse",
+        "stats_tab_qcm": "Nach Test",
+        "stats_tab_question": "Nach Frage",
+        "stats_tab_student": "Nach Schüler",
+        "stats_ylabel_note": "Durchschnittsnote (/20)",
+        "stats_ylabel_success": "Erfolgsquote (%)",
+        "stats_question_prefix": "F",
+        "stats_no_answer_key": ("Für die ausgewählte(n) Korrektur(en) ist keine Musterlösung archiviert: Es "
+                                 "lässt sich nicht feststellen, welche Antwort bei jeder Frage richtig war."),
 
         # --- Datenordner (DataTab + Einstellungen) ---
         "prefs_data_dir_group": "Datenordner",
@@ -1255,6 +1312,7 @@ TRANSLATIONS = {
         "data_mode_classes": "Listas de alumnos (clases)",
         "data_mode_corrections": "Correcciones guardadas",
         "data_mode_keys": "Correcciones y baremos de exámenes",
+        "data_mode_stats": "Estadísticas",
         "data_class_label": "Clase:",
         "data_no_class": ("Todavía no hay ninguna clase archivada. Inicia una corrección (pestaña Escanear / "
                            "Corregir) para empezar a construir los datos de una clase."),
@@ -1291,6 +1349,24 @@ TRANSLATIONS = {
         "data_keys_rename_btn": "Renombrar",
         "data_keys_delete_btn": "Eliminar",
         "data_choose_key_first": "Elige una corrección de la lista.",
+
+        # --- DataTab: Estadísticas ---
+        "stats_selection_group": "Correcciones a analizar",
+        "stats_col_classe": "Clase",
+        "stats_select_hint": ("Selecciona una o varias correcciones arriba (Ctrl/Mayús para selección "
+                               "múltiple) y luego haz clic en «Mostrar estadísticas»."),
+        "stats_show_btn": "Mostrar estadísticas",
+        "stats_no_selection": "Elige primero al menos una corrección de la lista de arriba.",
+        "stats_no_data": "Todavía no hay ninguna corrección archivada.",
+        "stats_tab_class": "Por clase",
+        "stats_tab_qcm": "Por examen",
+        "stats_tab_question": "Por pregunta",
+        "stats_tab_student": "Por alumno",
+        "stats_ylabel_note": "Nota media (/20)",
+        "stats_ylabel_success": "Tasa de acierto (%)",
+        "stats_question_prefix": "P",
+        "stats_no_answer_key": ("No hay ningún baremo archivado con la(s) corrección(es) seleccionada(s): no se "
+                                 "puede saber cuál era la respuesta correcta de cada pregunta."),
 
         # --- Carpeta de datos (DataTab + Preferencias) ---
         "prefs_data_dir_group": "Carpeta de datos",

@@ -284,30 +284,66 @@ def save_copies(classe_name, run_name, report):
     return saved
 
 
-def save_report_json(classe_name, run_name, report):
+def save_report_json(classe_name, run_name, report, answer_key=None):
     """Archives the full report (list of dicts, as returned by
     roster_match.process_batch / scoring.compute_scores) as JSON, so
     load_report_json() can later reload it with full fidelity -- unlike
-    resultats.csv, which only keeps a flattened, display-oriented view."""
+    resultats.csv, which only keeps a flattened, display-oriented view.
+
+    When `answer_key` is given (the one used to grade this run, see
+    scoring.py/answer_key_store.py), it's archived alongside the report
+    -- needed later to tell which answer was CORRECT for a given
+    question (see load_report_answer_key(), used by the per-question
+    breakdown in the statistics view). Older archives saved without an
+    answer key simply can't be broken down by question."""
     path = os.path.join(run_dir(classe_name, run_name), REPORT_JSON_FILENAME)
+    payload = {"entries": report, "answer_key": answer_key} if answer_key is not None else report
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     return path
+
+
+def _read_report_payload(classe_name, run_name):
+    path = os.path.join(_class_dir_path(classe_name), CORRECTIONS_DIRNAME, _sanitize(run_name),
+                         REPORT_JSON_FILENAME)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_report_json(classe_name, run_name):
     """Reloads a report archived by save_report_json(). Returns None if
     no report.json exists for that run (e.g. an older archive, or the
     file was removed by hand)."""
-    path = os.path.join(_class_dir_path(classe_name), CORRECTIONS_DIRNAME, _sanitize(run_name),
-                         REPORT_JSON_FILENAME)
-    if not os.path.isfile(path):
+    raw = _read_report_payload(classe_name, run_name)
+    if raw is None:
         return None
-    with open(path, encoding="utf-8") as f:
-        report = json.load(f)
+    report = raw["entries"] if isinstance(raw, dict) and "entries" in raw else raw
     for entry in report:
         # JSON object keys are always strings -- "questions" is keyed by
         # question NUMBER everywhere else in the app, so convert back.
         if entry.get("questions"):
             entry["questions"] = {int(q): r for q, r in entry["questions"].items()}
     return report
+
+
+def load_report_answer_key(classe_name, run_name):
+    """The answer key archived alongside this run's report (see
+    save_report_json), or None if this run has none -- either an older
+    archive, or no corrigé was selected when it was graded."""
+    raw = _read_report_payload(classe_name, run_name)
+    if not isinstance(raw, dict):
+        return None
+    answer_key = raw.get("answer_key")
+    if not answer_key:
+        return None
+    try:
+        questions = {int(q): v for q, v in answer_key.get("questions", {}).items()}
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return {
+        "questions": questions,
+        "negative_points": bool(answer_key.get("negative_points", False)),
+        "partial_credit": bool(answer_key.get("partial_credit", False)),
+    }
