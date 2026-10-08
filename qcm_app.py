@@ -2558,9 +2558,9 @@ class DataTab(ScrollableTab):
 
         roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True)
-        self.roster_editor = RosterTableEditor(roster_frame, height=180)
-        self.roster_editor.pack(fill="both", expand=True)
-        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_roster).pack(
+        self.roster_view = CompactRosterView(roster_frame, height=220, n_columns=2)
+        self.roster_view.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("scan_edit_roster_btn"), command=self._open_roster_edit_dialog).pack(
             anchor="w", pady=(6, 0))
 
         # --- Mode : corrections enregistrées ---
@@ -2634,7 +2634,8 @@ class DataTab(ScrollableTab):
         if not classes:
             self.classe_var.set("")
             self.current_classe = None
-            self.roster_editor.clear_rows()
+            self.roster = {}
+            self.roster_view.load_roster({})
             self.corr_tree.delete(*self.corr_tree.get_children())
             self.open_folder_btn.config(state="disabled")
             self.summary_label.config(text=tr("data_no_class"))
@@ -2652,7 +2653,8 @@ class DataTab(ScrollableTab):
         classe = self.classe_var.get()
         self.current_classe = classe
         self.open_folder_btn.config(state="normal")
-        self.roster_editor.load_roster(class_archive.load_roster(classe))
+        self.roster = class_archive.load_roster(classe)
+        self.roster_view.load_roster(self.roster)
         self._refresh_corrections()
 
     def _open_folder(self):
@@ -2660,15 +2662,15 @@ class DataTab(ScrollableTab):
             os.startfile(class_archive.class_dir(self.current_classe))
 
     # -- Roster (retoucher / compléter) -------------------------------
-    def _save_roster(self):
+    def _open_roster_edit_dialog(self):
         if not self.current_classe:
+            messagebox.showwarning(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        roster, errors = self.roster_editor.extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        class_archive.save_roster(self.current_classe, roster)
-        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        RosterEditDialog(self, self.current_classe, self.roster, on_saved=self._on_roster_saved)
+
+    def _on_roster_saved(self, roster):
+        self.roster = roster
+        self.roster_view.load_roster(roster)
         self._refresh_corrections()
 
     # -- Corrections (vérifier / analyser) ----------------------------
