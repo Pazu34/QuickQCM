@@ -651,6 +651,7 @@ class GenerateTab(ScrollableTab):
         ttk.Entry(form, textvariable=self.subtitle_var, width=40).grid(row=row, column=1, sticky="we", padx=5)
 
         row += 1
+        n_questions_row = row
         ttk.Label(form, text=tr("gen_n_questions_label")).grid(row=row, column=0, sticky="w", pady=3)
         self.n_questions_var = tk.IntVar(value=s.get("n_questions", 12))
         ttk.Spinbox(form, from_=1, to=MAX_QUESTIONS, textvariable=self.n_questions_var, width=8).grid(
@@ -661,6 +662,22 @@ class GenerateTab(ScrollableTab):
         self.n_choices_var = tk.IntVar(value=s.get("n_choices", 5))
         ttk.Spinbox(form, from_=3, to=6, textvariable=self.n_choices_var, width=8).grid(
             row=row, column=1, sticky="w", padx=5)
+
+        # Regroupe ces deux cases a droite des lignes "nombre de
+        # questions"/"nombre de reponses" plutot que dans le cadre
+        # "Eleves" plus bas -- et evite de repeter "...directement sur
+        # la fiche" deux fois en les presentant sous un intitule commun.
+        print_group = ttk.Frame(form)
+        print_group.grid(row=n_questions_row, column=2, rowspan=2, sticky="nw", padx=(25, 0))
+        ttk.Label(print_group, text=tr("gen_print_group_label")).pack(anchor="w")
+        self.print_name_var = tk.BooleanVar(value=s.get("print_name", False))
+        ttk.Checkbutton(print_group, text=tr("gen_print_name_short"), variable=self.print_name_var).pack(
+            anchor="w", padx=(10, 0))
+        self.print_classe_var = tk.BooleanVar(value=s.get("print_classe", False))
+        ttk.Checkbutton(print_group, text=tr("gen_print_classe_short"), variable=self.print_classe_var).pack(
+            anchor="w", padx=(10, 0))
+        ttk.Label(print_group, text=tr("gen_print_hint"), foreground="#777777",
+                  wraplength=220, justify="left").pack(anchor="w", pady=(3, 0))
 
         row += 1
         self.show_classe_var = tk.BooleanVar(value=s.get("show_classe", True))
@@ -735,18 +752,7 @@ class GenerateTab(ScrollableTab):
         ttk.Button(self.multi_frame, text=tr("btn_refresh"), command=self._refresh_multi_classes_list).pack(
             anchor="w", pady=(3, 0))
 
-        identity_frame = ttk.Frame(roster_frame)
-        identity_frame.pack(fill="x", pady=(8, 0), anchor="w")
-        self.print_name_var = tk.BooleanVar(value=s.get("print_name", False))
-        ttk.Checkbutton(identity_frame, text=tr("gen_print_name"),
-                        variable=self.print_name_var).pack(anchor="w")
-        self.print_classe_var = tk.BooleanVar(value=s.get("print_classe", False))
-        ttk.Checkbutton(identity_frame, text=tr("gen_print_classe"),
-                        variable=self.print_classe_var).pack(anchor="w")
-        ttk.Label(identity_frame, text=tr("gen_print_hint"),
-                  foreground="#777777").pack(anchor="w")
-
-        self.extra_blank_frame = ttk.Frame(identity_frame)
+        self.extra_blank_frame = ttk.Frame(roster_frame)
         self.extra_blank_enabled_var = tk.BooleanVar(value=s.get("extra_blank_enabled", False))
         ttk.Checkbutton(self.extra_blank_frame, text=tr("gen_extra_blank_generate"),
                         variable=self.extra_blank_enabled_var).pack(side="left")
@@ -1674,6 +1680,75 @@ class RosterTableEditor(ttk.Frame):
         return roster, errors
 
 
+class CompactRosterView(ttk.Frame):
+    """Read-only "numero - nom" display of a class's roster, laid out on
+    several columns so a class of 25-30 students fits on screen with
+    little or no scrolling (unlike RosterTableEditor's one-row-per-line
+    grid, meant for editing rather than at-a-glance viewing). Used by
+    ScanTab; editing happens in a separate popup (see RosterEditDialog)
+    opened via its "Modifier la liste" button."""
+
+    def __init__(self, master, height=170, n_columns=2):
+        super().__init__(master)
+        self.n_columns = n_columns
+        self.scroll = ScrollableFrame(self, height=height)
+        self.scroll.pack(fill="both", expand=True)
+        self.load_roster({})
+
+    def load_roster(self, roster):
+        for w in self.scroll.inner.winfo_children():
+            w.destroy()
+        if not roster:
+            ttk.Label(self.scroll.inner, text=tr("scan_roster_empty"),
+                      foreground="#777777").pack(anchor="w", pady=4)
+            return
+        items = sorted(roster.items())
+        n_rows = (len(items) + self.n_columns - 1) // self.n_columns
+        grid = ttk.Frame(self.scroll.inner)
+        grid.pack(fill="x")
+        for i, (num, info) in enumerate(items):
+            col, row = divmod(i, n_rows)
+            text = f"{num} · {info.get('nom', '')}"
+            ttk.Label(grid, text=text).grid(row=row, column=col, sticky="w", padx=(0, 18), pady=1)
+
+
+class RosterEditDialog(tk.Toplevel):
+    """Popup with the full one-row-per-line editable roster grid (see
+    RosterTableEditor) -- opened from ScanTab's compact two-column view
+    (see CompactRosterView) via its "Modifier la liste" button, since
+    editing many rows is awkward in a multi-column layout."""
+
+    def __init__(self, master, classe, roster, on_saved):
+        super().__init__(master)
+        self.classe = classe
+        self.on_saved = on_saved
+        self.title(tr("scan_edit_roster_title", classe=classe))
+        self.transient(master)
+
+        frame = ttk.Frame(self, padding=10)
+        frame.pack(fill="both", expand=True)
+        self.editor = RosterTableEditor(frame, height=320)
+        self.editor.pack(fill="both", expand=True)
+        self.editor.load_roster(roster)
+
+        btn_row = ttk.Frame(self, padding=(10, 0, 10, 10))
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=tr("btn_cancel"), command=self.destroy).pack(side="right")
+        ttk.Button(btn_row, text=tr("data_save_roster_btn"), command=self._save).pack(side="right", padx=5)
+
+        self.grab_set()
+
+    def _save(self):
+        roster, errors = self.editor.extract_roster()
+        if errors:
+            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
+            return
+        class_archive.save_roster(self.classe, roster)
+        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        self.on_saved(roster)
+        self.destroy()
+
+
 class ArchiveBrowserDialog(tk.Toplevel):
     """Lets the teacher pick a class then one of its archived corrections
     (see class_archive.py) and reload it into ScanTab's results window --
@@ -1842,9 +1917,9 @@ class ScanTab(ScrollableTab):
 
         roster_frame = ttk.LabelFrame(class_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True, pady=(8, 0))
-        self.scan_roster_editor = RosterTableEditor(roster_frame, height=180)
-        self.scan_roster_editor.pack(fill="both", expand=True)
-        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_scan_roster).pack(
+        self.scan_roster_view = CompactRosterView(roster_frame, height=170, n_columns=2)
+        self.scan_roster_view.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("scan_edit_roster_btn"), command=self._open_roster_edit_dialog).pack(
             anchor="w", pady=(6, 0))
         self._refresh_scan_classes(select=s.get("scan_last_classe", ""))
 
@@ -1956,7 +2031,7 @@ class ScanTab(ScrollableTab):
         if not classes:
             self.scan_classe_var.set("")
             self.scan_current_classe = None
-            self.scan_roster_editor.clear_rows()
+            self.scan_roster_view.load_roster({})
             self.roster = {}
             return
         if selected in classes:
@@ -1970,18 +2045,17 @@ class ScanTab(ScrollableTab):
         self.scan_current_classe = classe
         roster = class_archive.load_roster(classe)
         self.roster = roster
-        self.scan_roster_editor.load_roster(roster)
+        self.scan_roster_view.load_roster(roster)
 
-    def _save_scan_roster(self):
+    def _open_roster_edit_dialog(self):
         if not self.scan_current_classe:
+            messagebox.showwarning(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        roster, errors = self.scan_roster_editor.extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        class_archive.save_roster(self.scan_current_classe, roster)
+        RosterEditDialog(self, self.scan_current_classe, self.roster, on_saved=self._on_scan_roster_saved)
+
+    def _on_scan_roster_saved(self, roster):
         self.roster = roster
-        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        self.scan_roster_view.load_roster(roster)
 
     def _open_manual_class_dialog(self):
         ManualClassDialog(self, on_created=lambda classe: self._refresh_scan_classes(select=classe))
@@ -2299,7 +2373,7 @@ class ScanTab(ScrollableTab):
         if self.scan_current_classe:
             class_archive.save_roster(self.scan_current_classe, merged)
             self.roster = merged
-            self.scan_roster_editor.load_roster(merged)
+            self.scan_roster_view.load_roster(merged)
             messagebox.showinfo(APP_TITLE, tr("res_csv_updated_classe", name=self.scan_current_classe,
                                                n=len(merged)))
             return
@@ -2439,18 +2513,29 @@ class DataTab(ScrollableTab):
     def _build_ui(self):
         build_data_dir_section(self.body, self.on_reload).pack(fill="x", pady=(0, 8))
 
-        mode_frame = ttk.Frame(self.body)
-        mode_frame.pack(fill="x", pady=(0, 8))
+        # Barre de navigation verticale (à gauche) pour les 3 modes,
+        # en complément de la barre d'onglets horizontale du Notebook
+        # principal -- pratique quand l'onglet est agrandi en largeur.
+        container = ttk.Frame(self.body)
+        container.pack(fill="both", expand=True)
+
+        sidebar = ttk.Frame(container)
+        sidebar.pack(side="left", fill="y", padx=(0, 10))
         modes = [
             ("classes", tr("data_mode_classes")),
             ("corrections", tr("data_mode_corrections")),
             ("keys", tr("data_mode_keys")),
         ]
         for value, label in modes:
-            ttk.Radiobutton(mode_frame, text=label, variable=self.mode_var, value=value,
-                            command=self._on_mode_change).pack(side="left", padx=(0, 15))
+            ttk.Radiobutton(sidebar, text=label, variable=self.mode_var, value=value,
+                            command=self._on_mode_change, style="Toolbutton").pack(fill="x", pady=(0, 2))
 
-        self.classe_row = ttk.Frame(self.body)
+        ttk.Separator(container, orient="vertical").pack(side="left", fill="y", padx=(0, 10))
+
+        content = ttk.Frame(container)
+        content.pack(side="left", fill="both", expand=True)
+
+        self.classe_row = ttk.Frame(content)
         ttk.Label(self.classe_row, text=tr("data_class_label")).pack(side="left")
         self.classe_var = tk.StringVar()
         self.classe_combo = ttk.Combobox(self.classe_row, textvariable=self.classe_var, state="readonly", width=25)
@@ -2463,23 +2548,23 @@ class DataTab(ScrollableTab):
         ttk.Button(self.classe_row, text=tr("data_new_class_open_btn"), command=self._open_new_class_dialog).pack(
             side="left", padx=5)
 
-        self.summary_label = ttk.Label(self.body, text="", foreground="#333333", wraplength=760, justify="left")
+        self.summary_label = ttk.Label(content, text="", foreground="#333333", wraplength=600, justify="left")
 
         # --- Mode : listes d'élèves (classes) ---
         # Creer une classe (a la main ou depuis un CSV) se fait dans une
         # fenetre separee (voir NewClassDialog / _open_new_class_dialog) --
         # ce cadre n'affiche que la liste de la classe SELECTIONNEE ci-dessus.
-        self.classes_mode_frame = ttk.Frame(self.body)
+        self.classes_mode_frame = ttk.Frame(content)
 
         roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True)
-        self.roster_editor = RosterTableEditor(roster_frame, height=180)
-        self.roster_editor.pack(fill="both", expand=True)
-        ttk.Button(roster_frame, text=tr("data_save_roster_btn"), command=self._save_roster).pack(
+        self.roster_view = CompactRosterView(roster_frame, height=220, n_columns=2)
+        self.roster_view.pack(fill="both", expand=True)
+        ttk.Button(roster_frame, text=tr("scan_edit_roster_btn"), command=self._open_roster_edit_dialog).pack(
             anchor="w", pady=(6, 0))
 
         # --- Mode : corrections enregistrées ---
-        self.corrections_mode_frame = ttk.Frame(self.body)
+        self.corrections_mode_frame = ttk.Frame(content)
         corr_frame = ttk.LabelFrame(self.corrections_mode_frame, text=tr("data_corrections_group"), padding=10)
         corr_frame.pack(fill="both", expand=True)
         columns = ("nom", "date", "eleves", "moyenne")
@@ -2498,7 +2583,7 @@ class DataTab(ScrollableTab):
                    command=self._delete_selected_correction).pack(side="left", padx=5)
 
         # --- Mode : corrigés et barèmes de QCM ---
-        self.keys_mode_frame = ttk.Frame(self.body)
+        self.keys_mode_frame = ttk.Frame(content)
         keys_frame = ttk.LabelFrame(self.keys_mode_frame, text=tr("data_keys_group"), padding=10)
         keys_frame.pack(fill="both", expand=True)
         key_columns = ("nom", "questions", "points")
@@ -2549,7 +2634,8 @@ class DataTab(ScrollableTab):
         if not classes:
             self.classe_var.set("")
             self.current_classe = None
-            self.roster_editor.clear_rows()
+            self.roster = {}
+            self.roster_view.load_roster({})
             self.corr_tree.delete(*self.corr_tree.get_children())
             self.open_folder_btn.config(state="disabled")
             self.summary_label.config(text=tr("data_no_class"))
@@ -2567,7 +2653,8 @@ class DataTab(ScrollableTab):
         classe = self.classe_var.get()
         self.current_classe = classe
         self.open_folder_btn.config(state="normal")
-        self.roster_editor.load_roster(class_archive.load_roster(classe))
+        self.roster = class_archive.load_roster(classe)
+        self.roster_view.load_roster(self.roster)
         self._refresh_corrections()
 
     def _open_folder(self):
@@ -2575,15 +2662,15 @@ class DataTab(ScrollableTab):
             os.startfile(class_archive.class_dir(self.current_classe))
 
     # -- Roster (retoucher / compléter) -------------------------------
-    def _save_roster(self):
+    def _open_roster_edit_dialog(self):
         if not self.current_classe:
+            messagebox.showwarning(APP_TITLE, tr("rmd_choose_class_first"))
             return
-        roster, errors = self.roster_editor.extract_roster()
-        if errors:
-            messagebox.showerror(APP_TITLE, tr("rmd_fix_first", errors="\n".join(errors)))
-            return
-        class_archive.save_roster(self.current_classe, roster)
-        messagebox.showinfo(APP_TITLE, tr("data_roster_saved", n=len(roster)))
+        RosterEditDialog(self, self.current_classe, self.roster, on_saved=self._on_roster_saved)
+
+    def _on_roster_saved(self, roster):
+        self.roster = roster
+        self.roster_view.load_roster(roster)
         self._refresh_corrections()
 
     # -- Corrections (vérifier / analyser) ----------------------------
