@@ -2439,18 +2439,29 @@ class DataTab(ScrollableTab):
     def _build_ui(self):
         build_data_dir_section(self.body, self.on_reload).pack(fill="x", pady=(0, 8))
 
-        mode_frame = ttk.Frame(self.body)
-        mode_frame.pack(fill="x", pady=(0, 8))
+        # Barre de navigation verticale (à gauche) pour les 3 modes,
+        # en complément de la barre d'onglets horizontale du Notebook
+        # principal -- pratique quand l'onglet est agrandi en largeur.
+        container = ttk.Frame(self.body)
+        container.pack(fill="both", expand=True)
+
+        sidebar = ttk.Frame(container)
+        sidebar.pack(side="left", fill="y", padx=(0, 10))
         modes = [
             ("classes", tr("data_mode_classes")),
             ("corrections", tr("data_mode_corrections")),
             ("keys", tr("data_mode_keys")),
         ]
         for value, label in modes:
-            ttk.Radiobutton(mode_frame, text=label, variable=self.mode_var, value=value,
-                            command=self._on_mode_change).pack(side="left", padx=(0, 15))
+            ttk.Radiobutton(sidebar, text=label, variable=self.mode_var, value=value,
+                            command=self._on_mode_change, style="Toolbutton").pack(fill="x", pady=(0, 2))
 
-        self.classe_row = ttk.Frame(self.body)
+        ttk.Separator(container, orient="vertical").pack(side="left", fill="y", padx=(0, 10))
+
+        content = ttk.Frame(container)
+        content.pack(side="left", fill="both", expand=True)
+
+        self.classe_row = ttk.Frame(content)
         ttk.Label(self.classe_row, text=tr("data_class_label")).pack(side="left")
         self.classe_var = tk.StringVar()
         self.classe_combo = ttk.Combobox(self.classe_row, textvariable=self.classe_var, state="readonly", width=25)
@@ -2463,13 +2474,13 @@ class DataTab(ScrollableTab):
         ttk.Button(self.classe_row, text=tr("data_new_class_open_btn"), command=self._open_new_class_dialog).pack(
             side="left", padx=5)
 
-        self.summary_label = ttk.Label(self.body, text="", foreground="#333333", wraplength=760, justify="left")
+        self.summary_label = ttk.Label(content, text="", foreground="#333333", wraplength=600, justify="left")
 
         # --- Mode : listes d'élèves (classes) ---
         # Creer une classe (a la main ou depuis un CSV) se fait dans une
         # fenetre separee (voir NewClassDialog / _open_new_class_dialog) --
         # ce cadre n'affiche que la liste de la classe SELECTIONNEE ci-dessus.
-        self.classes_mode_frame = ttk.Frame(self.body)
+        self.classes_mode_frame = ttk.Frame(content)
 
         roster_frame = ttk.LabelFrame(self.classes_mode_frame, text=tr("data_roster_group"), padding=10)
         roster_frame.pack(fill="both", expand=True)
@@ -2479,7 +2490,7 @@ class DataTab(ScrollableTab):
             anchor="w", pady=(6, 0))
 
         # --- Mode : corrections enregistrées ---
-        self.corrections_mode_frame = ttk.Frame(self.body)
+        self.corrections_mode_frame = ttk.Frame(content)
         corr_frame = ttk.LabelFrame(self.corrections_mode_frame, text=tr("data_corrections_group"), padding=10)
         corr_frame.pack(fill="both", expand=True)
         columns = ("nom", "date", "eleves", "moyenne")
@@ -2498,7 +2509,7 @@ class DataTab(ScrollableTab):
                    command=self._delete_selected_correction).pack(side="left", padx=5)
 
         # --- Mode : corrigés et barèmes de QCM ---
-        self.keys_mode_frame = ttk.Frame(self.body)
+        self.keys_mode_frame = ttk.Frame(content)
         keys_frame = ttk.LabelFrame(self.keys_mode_frame, text=tr("data_keys_group"), padding=10)
         keys_frame.pack(fill="both", expand=True)
         key_columns = ("nom", "questions", "points")
