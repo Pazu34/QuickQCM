@@ -651,6 +651,7 @@ class GenerateTab(ScrollableTab):
         ttk.Entry(form, textvariable=self.subtitle_var, width=40).grid(row=row, column=1, sticky="we", padx=5)
 
         row += 1
+        n_questions_row = row
         ttk.Label(form, text=tr("gen_n_questions_label")).grid(row=row, column=0, sticky="w", pady=3)
         self.n_questions_var = tk.IntVar(value=s.get("n_questions", 12))
         ttk.Spinbox(form, from_=1, to=MAX_QUESTIONS, textvariable=self.n_questions_var, width=8).grid(
@@ -661,6 +662,22 @@ class GenerateTab(ScrollableTab):
         self.n_choices_var = tk.IntVar(value=s.get("n_choices", 5))
         ttk.Spinbox(form, from_=3, to=6, textvariable=self.n_choices_var, width=8).grid(
             row=row, column=1, sticky="w", padx=5)
+
+        # Regroupe ces deux cases a droite des lignes "nombre de
+        # questions"/"nombre de reponses" plutot que dans le cadre
+        # "Eleves" plus bas -- et evite de repeter "...directement sur
+        # la fiche" deux fois en les presentant sous un intitule commun.
+        print_group = ttk.Frame(form)
+        print_group.grid(row=n_questions_row, column=2, rowspan=2, sticky="nw", padx=(25, 0))
+        ttk.Label(print_group, text=tr("gen_print_group_label")).pack(anchor="w")
+        self.print_name_var = tk.BooleanVar(value=s.get("print_name", False))
+        ttk.Checkbutton(print_group, text=tr("gen_print_name_short"), variable=self.print_name_var).pack(
+            anchor="w", padx=(10, 0))
+        self.print_classe_var = tk.BooleanVar(value=s.get("print_classe", False))
+        ttk.Checkbutton(print_group, text=tr("gen_print_classe_short"), variable=self.print_classe_var).pack(
+            anchor="w", padx=(10, 0))
+        ttk.Label(print_group, text=tr("gen_print_hint"), foreground="#777777",
+                  wraplength=220, justify="left").pack(anchor="w", pady=(3, 0))
 
         row += 1
         self.show_classe_var = tk.BooleanVar(value=s.get("show_classe", True))
@@ -735,18 +752,7 @@ class GenerateTab(ScrollableTab):
         ttk.Button(self.multi_frame, text=tr("btn_refresh"), command=self._refresh_multi_classes_list).pack(
             anchor="w", pady=(3, 0))
 
-        identity_frame = ttk.Frame(roster_frame)
-        identity_frame.pack(fill="x", pady=(8, 0), anchor="w")
-        self.print_name_var = tk.BooleanVar(value=s.get("print_name", False))
-        ttk.Checkbutton(identity_frame, text=tr("gen_print_name"),
-                        variable=self.print_name_var).pack(anchor="w")
-        self.print_classe_var = tk.BooleanVar(value=s.get("print_classe", False))
-        ttk.Checkbutton(identity_frame, text=tr("gen_print_classe"),
-                        variable=self.print_classe_var).pack(anchor="w")
-        ttk.Label(identity_frame, text=tr("gen_print_hint"),
-                  foreground="#777777").pack(anchor="w")
-
-        self.extra_blank_frame = ttk.Frame(identity_frame)
+        self.extra_blank_frame = ttk.Frame(roster_frame)
         self.extra_blank_enabled_var = tk.BooleanVar(value=s.get("extra_blank_enabled", False))
         ttk.Checkbutton(self.extra_blank_frame, text=tr("gen_extra_blank_generate"),
                         variable=self.extra_blank_enabled_var).pack(side="left")
