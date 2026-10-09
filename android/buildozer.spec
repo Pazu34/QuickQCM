@@ -25,8 +25,12 @@ version = 0.1.0
 # live pip/packaging bug (a real charset_normalizer wheel built for
 # "android_24_arm64_v8a"/cp314 that pip itself then refused to
 # install, "not a supported wheel on this platform"). 3.11 is a far
-# more established p4a target and doesn't hit this.
-requirements = python3==3.11,kivy==2.3.1,opencv,numpy,plyer,pyjnius
+# more established p4a target and doesn't hit this. hostpython3 (the
+# Python that RUNS the build on the CI machine, as opposed to python3
+# which runs ON the phone) must be pinned to the exact same version --
+# p4a refuses to build otherwise ("python3 should have same version as
+# hostpython3").
+requirements = python3==3.11,hostpython3==3.11,kivy==2.3.1,opencv,numpy,plyer,pyjnius
 
 orientation = portrait
 fullscreen = 0
