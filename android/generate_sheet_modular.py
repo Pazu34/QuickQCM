@@ -19,8 +19,22 @@ sheet itself, e.g. "Nom :"/"Classe :"/"Exemple :") is intentionally
 left in French: it's the printed document's content, not the
 software's interface (see translations.py for the interface)."""
 from dataclasses import dataclass, replace as dataclass_replace
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm as MM
+try:
+    # Mobile app note: reportlab's Android build (python-for-android
+    # recipe) fetches its source from hg.reportlab.com, which has been
+    # seen returning 403 Forbidden to CI runners -- an external-hosting
+    # issue, not something in this codebase. Since the phone app never
+    # calls draw_sheet()/build()/build_batch() (sheet GENERATION isn't
+    # part of it, see android/README.md), those are the only functions
+    # that actually need reportlab, so the import is made optional here
+    # rather than pulling an unreliable dependency into the APK for a
+    # feature the phone app doesn't expose. The desktop app always has
+    # reportlab installed (see requirements.txt), so this never affects it.
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import mm as MM
+except ImportError:
+    canvas = None
+    MM = 1.0
 
 # --- Native dimensions (scale 1), from the validated A6 design ---
 NATIVE_W = 105.0
