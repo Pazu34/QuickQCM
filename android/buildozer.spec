@@ -18,7 +18,15 @@ version = 0.1.0
 # and reportlab's own Android build was unreliable in CI (its source
 # host returned 403 Forbidden), so generate_sheet_modular.py now makes
 # that import optional, dropped here accordingly.
-requirements = python3,kivy==2.3.1,opencv,numpy,plyer,pyjnius
+# python3==3.11 (rather than letting p4a pick its newest default,
+# currently 3.14): plyer and some of Kivy's own pip-installed
+# dependencies have no python-for-android recipe and fall back to a
+# plain `pip install` for the Android target -- on 3.14 this hit a
+# live pip/packaging bug (a real charset_normalizer wheel built for
+# "android_24_arm64_v8a"/cp314 that pip itself then refused to
+# install, "not a supported wheel on this platform"). 3.11 is a far
+# more established p4a target and doesn't hit this.
+requirements = python3==3.11,kivy==2.3.1,opencv,numpy,plyer,pyjnius
 
 orientation = portrait
 fullscreen = 0
