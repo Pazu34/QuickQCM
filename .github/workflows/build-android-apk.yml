@@ -18,11 +18,24 @@ jobs:
         with:
           python-version: "3.11"
 
+      # The Android Gradle plugin needs Java 17. ubuntu-22.04 runners
+      # ship several JDKs preinstalled (8/11/17/21) with JAVA_HOME
+      # defaulting to 11 -- apt-get installing openjdk-17-jdk puts the
+      # binaries on disk but does NOT change JAVA_HOME, so gradlew still
+      # ran under 11 and failed ("Android Gradle plugin requires Java 17
+      # to run. You are currently using Java 11."). setup-java actually
+      # sets JAVA_HOME (and exports it to later steps), which apt alone
+      # doesn't do.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Install system build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
+            git zip unzip \
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
             cmake libffi-dev libssl-dev \
