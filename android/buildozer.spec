@@ -24,6 +24,9 @@ android.permissions = CAMERA
 android.api = 34
 android.minapi = 24
 android.archs = arm64-v8a
+# Avoids the build hanging on an interactive license prompt in CI
+# (buildozer accepts the Android SDK licenses on its own when true).
+android.accept_sdk_license = True
 
 [buildozer]
 log_level = 2

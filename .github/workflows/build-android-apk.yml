@@ -5,18 +5,37 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned to 22.04 (rather than ubuntu-latest / 24.04): several
+    # python-for-android system dependencies below (libncurses5-dev,
+    # libtinfo5) were dropped from Ubuntu's repos starting 23.04+, and
+    # 22.04 is the environment most buildozer/Android CI recipes are
+    # written and tested against.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build with buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      - uses: actions/setup-python@v5
         with:
-          workdir: android
-          buildozer_version: stable
+          python-version: "3.11"
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
+            cmake libffi-dev libssl-dev \
+            build-essential ccache
+
+      - name: Install buildozer
+        run: pip install --upgrade buildozer cython
+
+      - name: Build with buildozer
+        working-directory: android
+        run: buildozer -v android debug
 
       - uses: actions/upload-artifact@v4
         with:
           name: QCM_Scanner_Mobile_apk
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: android/bin/*.apk
