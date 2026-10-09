@@ -7,6 +7,13 @@ __pycache__/
 build/
 dist/
 *.spec
+!android/buildozer.spec
 *.zip
 Données/
 data_dir.json
+
+# Android (buildozer) local build artifacts -- not the android/ source
+# folder itself, only what buildozer generates when run locally.
+android/.buildozer/
+android/bin/
+

@@ -1,0 +1,22 @@
+name: Build Android APK (QCM Scanner Mobile)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: android
+          buildozer_version: stable
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QCM_Scanner_Mobile_apk
+          path: ${{ steps.buildozer.outputs.filename }}
