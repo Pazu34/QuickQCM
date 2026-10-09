@@ -31,6 +31,16 @@ jobs:
       - name: Install buildozer
         run: pip install --upgrade buildozer cython
 
+      # Speeds up the next run a lot: the Android SDK/NDK download and
+      # the OpenCV/NumPy/Kivy recipe compilation are the slow part of
+      # a first build (20-30+ min), and don't need to be redone once
+      # this folder is warm -- only invalidated by a change to
+      # buildozer.spec itself.
+      - uses: actions/cache@v4
+        with:
+          path: android/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+
       - name: Build with buildozer
         working-directory: android
         run: buildozer -v android debug
