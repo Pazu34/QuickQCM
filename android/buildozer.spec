@@ -29,8 +29,12 @@ version = 0.1.0
 # Python that RUNS the build on the CI machine, as opposed to python3
 # which runs ON the phone) must be pinned to the exact same version --
 # p4a refuses to build otherwise ("python3 should have same version as
-# hostpython3").
-requirements = python3==3.11,hostpython3==3.11,kivy==2.3.1,opencv,numpy,plyer,pyjnius
+# hostpython3"). Needs the FULL version (major.minor.patch): p4a's
+# hostpython3 recipe downloads straight from
+# https://github.com/python/cpython/archive/refs/tags/v<version>.tar.gz,
+# and "v3.11" alone isn't a real tag (404) -- only full ones are, e.g.
+# v3.11.9.
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,opencv,numpy,plyer,pyjnius
 
 orientation = portrait
 fullscreen = 0
