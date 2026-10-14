@@ -1934,8 +1934,31 @@ class ScanTab(ScrollableTab):
         ttk.Button(btn_row, text=tr("scan_remove_selection"), command=self._remove_selected_photos).pack(
             side="left", padx=5)
         ttk.Button(btn_row, text=tr("scan_clear_list"), command=self._clear_photos).pack(side="left", padx=5)
-        self.photos_list = tk.Listbox(photos_frame, height=6, selectmode="extended")
-        self.photos_list.pack(fill="x", pady=6)
+
+        # List on the left, preview on the right: selecting a photo (click
+        # or arrow keys) shows it immediately at a size meant to at least
+        # read the handwritten class on the sheet, without having to open
+        # anything -- double-clicking either one opens it full-size (see
+        # _on_photo_select / _on_photo_double_click).
+        list_row = ttk.Frame(photos_frame)
+        list_row.pack(fill="x", pady=6)
+        self.photos_list = tk.Listbox(list_row, height=12, selectmode="extended", exportselection=False)
+        self.photos_list.pack(side="left", fill="both", expand=True)
+        self.photos_list.bind("<<ListboxSelect>>", self._on_photo_select)
+        self.photos_list.bind("<Double-Button-1>", self._on_photo_double_click)
+
+        self._preview_image_path = None
+        self._preview_photo = None
+        preview_box = tk.Frame(list_row, width=260, height=340, relief="groove", borderwidth=1,
+                                background="#dddddd")
+        preview_box.pack(side="left", padx=(10, 0))
+        preview_box.pack_propagate(False)
+        self.preview_label = tk.Label(preview_box, background="#dddddd", foreground="#666666",
+                                        text=tr("scan_preview_empty"), wraplength=240, justify="center",
+                                        cursor="hand2")
+        self.preview_label.pack(fill="both", expand=True)
+        self.preview_label.bind("<Double-Button-1>", self._on_photo_double_click)
+        ttk.Label(photos_frame, text=tr("scan_preview_hint"), foreground="#555555").pack(anchor="w")
 
         key_row = ttk.Frame(photos_frame)
         key_row.pack(fill="x")
@@ -2155,11 +2178,53 @@ class ScanTab(ScrollableTab):
         run_in_background(self, work, on_done)
 
     def _remove_selected_photos(self):
+        removed = {self.photos_list.get(idx) for idx in self.photos_list.curselection()}
         for idx in reversed(self.photos_list.curselection()):
             self.photos_list.delete(idx)
+        if self._preview_image_path in removed:
+            self._clear_preview()
 
     def _clear_photos(self):
         self.photos_list.delete(0, "end")
+        self._clear_preview()
+
+    # -- Preview ------------------------------------------------------
+    def _on_photo_select(self, event):
+        sel = self.photos_list.curselection()
+        if not sel:
+            return
+        self._show_preview(self.photos_list.get(sel[0]))
+
+    def _show_preview(self, path):
+        self._preview_image_path = path
+        try:
+            with Image.open(path) as img:
+                img = img.convert("RGB")
+                img.thumbnail((240, 320), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+        except (OSError, ValueError) as exc:
+            self._preview_photo = None
+            self.preview_label.config(image="", text=tr("scan_preview_load_error", detail=exc))
+            return
+        self._preview_photo = photo  # kept alive: Tk drops the image once its last Python reference goes away
+        self.preview_label.config(image=photo, text="")
+
+    def _clear_preview(self):
+        self._preview_image_path = None
+        self._preview_photo = None
+        self.preview_label.config(image="", text=tr("scan_preview_empty"))
+
+    def _on_photo_double_click(self, event):
+        if event.widget is self.photos_list:
+            idx = self.photos_list.nearest(event.y)
+            if idx < 0 or idx >= self.photos_list.size():
+                return
+            path = self.photos_list.get(idx)
+        else:
+            path = self._preview_image_path
+        if not path:
+            return
+        PhotoPreviewDialog(self, path)
 
     # -- Answer key --------------------------------------------------------
     def _open_answer_key(self):
@@ -2392,6 +2457,43 @@ class ScanTab(ScrollableTab):
             return
         self.roster = merged
         messagebox.showinfo(APP_TITLE, tr("res_csv_updated", path=path))
+
+
+# ---------------------------------------------------------------------
+# Full-size view of a single scanned-copy photo, opened by double-
+# clicking it in ScanTab's photo list or preview. Shown at the image's
+# own resolution unless that exceeds the screen, in which case it's
+# scaled down just enough to fit entirely on screen (never cropped or
+# scrolled).
+# ---------------------------------------------------------------------
+class PhotoPreviewDialog(tk.Toplevel):
+    def __init__(self, master, path):
+        super().__init__(master)
+        self.title(tr("scan_preview_title", name=os.path.basename(path)))
+        self._photo = None
+
+        try:
+            with Image.open(path) as img:
+                img = img.convert("RGB")
+                orig_w, orig_h = img.size
+                max_w = int(self.winfo_screenwidth() * 0.92)
+                max_h = int(self.winfo_screenheight() * 0.85)
+                if orig_w > max_w or orig_h > max_h:
+                    ratio = min(max_w / orig_w, max_h / orig_h)
+                    img = img.resize((max(1, int(orig_w * ratio)), max(1, int(orig_h * ratio))), Image.LANCZOS)
+                self._photo = ImageTk.PhotoImage(img)
+        except (OSError, ValueError) as exc:
+            ttk.Label(self, text=tr("scan_preview_load_error", detail=exc), padding=20).pack()
+            ttk.Button(self, text=tr("btn_close"), command=self.destroy).pack(pady=(0, 15))
+            self.transient(master)
+            self.grab_set()
+            return
+
+        ttk.Label(self, image=self._photo).pack()
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.transient(master)
+        self.grab_set()
+        self.focus_set()
 
 
 # ---------------------------------------------------------------------
