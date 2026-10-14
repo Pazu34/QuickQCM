@@ -548,6 +548,45 @@ def cv2_to_photoimage(bgr_image, max_w=520, max_h=None):
     return ImageTk.PhotoImage(pil_img)
 
 
+def _apply_rotation(pil_img, degrees):
+    """Rotates a PIL image clockwise by `degrees` (0/90/180/270, see
+    ScanTab's rotation buttons), expanding the canvas so nothing gets
+    cropped. A no-op for 0."""
+    degrees = degrees % 360
+    if not degrees:
+        return pil_img
+    return pil_img.rotate(-degrees, expand=True)
+
+
+def _materialize_rotations(photo_paths, rotations):
+    """Returns `photo_paths` unchanged if none of them have a pending
+    rotation (ScanTab.photo_rotations); otherwise returns a new list
+    where each rotated photo is first written out to a temp copy at the
+    corrected orientation -- the original file (camera photo or PDF-
+    extracted page) is never touched -- so detection and archiving
+    always see the right orientation."""
+    if not any(rotations.get(p) for p in photo_paths):
+        return photo_paths
+    import cv2
+    out_dir = tempfile.mkdtemp(prefix="qcm_rotated_")
+    result = []
+    for p in photo_paths:
+        degrees = rotations.get(p, 0) % 360
+        if not degrees:
+            result.append(p)
+            continue
+        img = cv2.imread(p)
+        if img is None:
+            result.append(p)  # let analyse() report the read error itself
+            continue
+        for _ in range(degrees // 90):
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        out_path = os.path.join(out_dir, os.path.basename(p))
+        cv2.imwrite(out_path, img)
+        result.append(out_path)
+    return result
+
+
 GRID_CELL_SIZE = 34
 
 
@@ -1883,6 +1922,12 @@ class ScanTab(ScrollableTab):
         self.last_run_dir = None
         self.last_run_name = None
         self.last_archive_classe = None
+        # {path: degrees (90/180/270)} for photos rotated via the
+        # "Rotation 90°"/"Rotation 180°" buttons -- never applied to the
+        # file on disk, only materialized into temp copies when the
+        # correction actually runs (see _materialize_rotations), so the
+        # teacher's original photos/PDF pages are never touched.
+        self.photo_rotations = {}
         self.note_out_of_20_var = tk.BooleanVar(value=self.settings.get("note_out_of_20", False))
         self.save_copies_var = tk.BooleanVar(value=self.settings.get("save_scan_copies", False))
         self._build_ui()
@@ -1935,6 +1980,15 @@ class ScanTab(ScrollableTab):
             side="left", padx=5)
         ttk.Button(btn_row, text=tr("scan_clear_list"), command=self._clear_photos).pack(side="left", padx=5)
 
+        rotate_row = ttk.Frame(photos_frame)
+        rotate_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(rotate_row, text=tr("scan_rotate_label")).pack(side="left")
+        ttk.Button(rotate_row, text=tr("scan_rotate_90"), command=lambda: self._rotate_selected(90)).pack(
+            side="left", padx=5)
+        ttk.Button(rotate_row, text=tr("scan_rotate_180"), command=lambda: self._rotate_selected(180)).pack(
+            side="left", padx=5)
+        ttk.Label(rotate_row, text=tr("scan_rotate_hint"), foreground="#555555").pack(side="left", padx=(10, 0))
+
         # List on the left, preview on the right: selecting a photo (click
         # or arrow keys) shows it immediately at a size meant to at least
         # read the handwritten class on the sheet, without having to open
@@ -1946,6 +2000,7 @@ class ScanTab(ScrollableTab):
         self.photos_list.pack(side="left", fill="both", expand=True)
         self.photos_list.bind("<<ListboxSelect>>", self._on_photo_select)
         self.photos_list.bind("<Double-Button-1>", self._on_photo_double_click)
+        self._listbox_default_bg = self.photos_list.cget("background")
 
         self._preview_image_path = None
         self._preview_photo = None
@@ -2181,12 +2236,33 @@ class ScanTab(ScrollableTab):
         removed = {self.photos_list.get(idx) for idx in self.photos_list.curselection()}
         for idx in reversed(self.photos_list.curselection()):
             self.photos_list.delete(idx)
+        for path in removed:
+            self.photo_rotations.pop(path, None)
         if self._preview_image_path in removed:
             self._clear_preview()
 
     def _clear_photos(self):
         self.photos_list.delete(0, "end")
+        self.photo_rotations.clear()
         self._clear_preview()
+
+    # -- Rotation -------------------------------------------------------
+    def _rotate_selected(self, delta):
+        sel = self.photos_list.curselection()
+        if not sel:
+            messagebox.showwarning(APP_TITLE, tr("scan_rotate_need_selection"))
+            return
+        for idx in sel:
+            path = self.photos_list.get(idx)
+            new_deg = (self.photo_rotations.get(path, 0) + delta) % 360
+            if new_deg:
+                self.photo_rotations[path] = new_deg
+                self.photos_list.itemconfig(idx, background="#cfe3ff")
+            else:
+                self.photo_rotations.pop(path, None)
+                self.photos_list.itemconfig(idx, background=self._listbox_default_bg)
+        if self._preview_image_path in {self.photos_list.get(idx) for idx in sel}:
+            self._show_preview(self._preview_image_path)
 
     # -- Preview ------------------------------------------------------
     def _on_photo_select(self, event):
@@ -2200,6 +2276,7 @@ class ScanTab(ScrollableTab):
         try:
             with Image.open(path) as img:
                 img = img.convert("RGB")
+                img = _apply_rotation(img, self.photo_rotations.get(path, 0))
                 img.thumbnail((240, 320), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
         except (OSError, ValueError) as exc:
@@ -2224,7 +2301,7 @@ class ScanTab(ScrollableTab):
             path = self._preview_image_path
         if not path:
             return
-        PhotoPreviewDialog(self, path)
+        PhotoPreviewDialog(self, path, self.photo_rotations.get(path, 0))
 
     # -- Answer key --------------------------------------------------------
     def _open_answer_key(self):
@@ -2293,6 +2370,7 @@ class ScanTab(ScrollableTab):
         roster_snapshot = dict(self.roster)
         out_of_20 = self.note_out_of_20_var.get()
         save_copies_wanted = self.save_copies_var.get()
+        rotations_snapshot = dict(self.photo_rotations)
 
         # Ask for a name for this correction -- pre-filled with a
         # class+date suggestion, editable, so the teacher can label it
@@ -2318,7 +2396,8 @@ class ScanTab(ScrollableTab):
 
         def work():
             run_dir = class_archive.run_dir(classe_name, run_name)
-            report = process_batch(photo_paths, roster_snapshot, run_dir)
+            effective_paths = _materialize_rotations(photo_paths, rotations_snapshot)
+            report = process_batch(effective_paths, roster_snapshot, run_dir)
             if self.answer_key:
                 scoring.compute_scores(report, self.answer_key)
 
@@ -2467,7 +2546,7 @@ class ScanTab(ScrollableTab):
 # scrolled).
 # ---------------------------------------------------------------------
 class PhotoPreviewDialog(tk.Toplevel):
-    def __init__(self, master, path):
+    def __init__(self, master, path, rotation_degrees=0):
         super().__init__(master)
         self.title(tr("scan_preview_title", name=os.path.basename(path)))
         self._photo = None
@@ -2475,6 +2554,7 @@ class PhotoPreviewDialog(tk.Toplevel):
         try:
             with Image.open(path) as img:
                 img = img.convert("RGB")
+                img = _apply_rotation(img, rotation_degrees)
                 orig_w, orig_h = img.size
                 max_w = int(self.winfo_screenwidth() * 0.92)
                 max_h = int(self.winfo_screenheight() * 0.85)
