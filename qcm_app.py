@@ -2075,9 +2075,25 @@ class ScanTab(ScrollableTab):
         ttk.Checkbutton(btn_row, text=tr("res_note_out_of_20"), variable=self.note_out_of_20_var,
                          command=self._on_toggle_note_mode).pack(side="left", padx=(20, 0))
 
-        self.summary_label = ttk.Label(win, text="", foreground="#333333", wraplength=960, justify="left",
-                                        padding=(10, 0))
-        self.summary_label.pack(fill="x")
+        # A fixed-height, scrollable text area rather than a plain Label:
+        # on a large/messy batch (many read errors, wrong roster loaded...)
+        # the summary can run to many lines, and a Label just grows
+        # without bound -- past a point that pushed the results table
+        # (and everything below it) off the bottom of the window, with no
+        # way to reach it. This keeps the summary itself always
+        # reachable (its own scrollbar) and leaves the table a
+        # guaranteed, stable amount of space below it (see also
+        # format_batch_report, which groups repeated same-type messages
+        # instead of one line per photo).
+        summary_frame = ttk.Frame(win)
+        summary_frame.pack(fill="x", padx=10, pady=(8, 0))
+        self.summary_text = tk.Text(summary_frame, height=8, wrap="word", relief="flat",
+                                     background="#f0f0f0", foreground="#333333",
+                                     font=("Segoe UI", 9), state="disabled")
+        self.summary_text.pack(side="left", fill="both", expand=True)
+        summary_vsb = ttk.Scrollbar(summary_frame, orient="vertical", command=self.summary_text.yview)
+        summary_vsb.pack(side="right", fill="y")
+        self.summary_text.configure(yscrollcommand=summary_vsb.set)
 
         columns = ("numero", "eleve", "classe", "statut", "lues", "note")
         self.tree = ttk.Treeview(win, columns=columns, show="headings", height=20)
@@ -2100,6 +2116,12 @@ class ScanTab(ScrollableTab):
                   background="#ffcc66", padding=(6, 3)).pack(anchor="w", padx=10, pady=(0, 10))
 
         self._populate_tree()
+
+    def _set_summary(self, text):
+        self.summary_text.config(state="normal")
+        self.summary_text.delete("1.0", "end")
+        self.summary_text.insert("1.0", text)
+        self.summary_text.config(state="disabled")
 
     # -- CSV --------------------------------------------------------
     def _refresh_scan_classes(self, select=None):
@@ -2353,7 +2375,7 @@ class ScanTab(ScrollableTab):
         self._populate_tree()
         self.show_results_btn.config(state="normal")
         self.open_class_archive_btn.config(state="normal")
-        self.summary_label.config(text=tr("arch_loaded_summary", name=run_name, classe=classe_name, n=len(report)))
+        self._set_summary(tr("arch_loaded_summary", name=run_name, classe=classe_name, n=len(report)))
 
     # -- Run grading -------------------------------------------
     def _on_run(self):
@@ -2392,7 +2414,7 @@ class ScanTab(ScrollableTab):
         self.run_btn.config(state="disabled")
         self.progress.start(12)
         self._ensure_results_window()
-        self.summary_label.config(text=tr("scan_reading_photos", n=len(photo_paths)))
+        self._set_summary(tr("scan_reading_photos", n=len(photo_paths)))
 
         def work():
             run_dir = class_archive.run_dir(classe_name, run_name)
@@ -2421,7 +2443,7 @@ class ScanTab(ScrollableTab):
             if err:
                 exc, tb = err
                 messagebox.showerror(APP_TITLE, tr("scan_failed", detail=exc))
-                self.summary_label.config(text="")
+                self._set_summary("")
                 return
             report, run_dir, run_name, classe_name = result
             self.report = report
@@ -2436,7 +2458,7 @@ class ScanTab(ScrollableTab):
             if self.scan_current_classe:
                 s["scan_last_classe"] = self.scan_current_classe
             app_config.save_settings(s)
-            self.summary_label.config(text=format_batch_report(report))
+            self._set_summary(format_batch_report(report))
 
         run_in_background(self, work, on_done)
 

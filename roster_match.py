@@ -131,6 +131,17 @@ def process_batch(image_paths, roster, output_dir, adaptive=True):
 
 
 def format_batch_report(report):
+    """Human-readable summary shown in the "Résultats de la correction"
+    window (see qcm_app.py's ScanTab._set_summary). Messages of the same
+    kind are grouped into a single line (e.g. every read-error sharing
+    the same cause lists all its photos together) instead of one line
+    per photo, and only ever shows a FILE NAME, never a full path --
+    both to keep this summary short enough to read without scrolling
+    through dozens of near-identical lines, and because a raw path
+    (especially an auto-generated crop file name like "n5_inconnu.png")
+    isn't something the teacher would recognize anyway; double-clicking
+    the corresponding row in the results table already shows the actual
+    crop image/photo for that case."""
     lines = []
     n_ok = sum(1 for e in report if e["status"] == "ok")
     n_unknown = sum(1 for e in report if e["status"] == "numero_inconnu")
@@ -143,22 +154,33 @@ def format_batch_report(report):
                  f"{n_missing} face(s) manquante(s), {n_error} erreur(s) de lecture.")
     lines.append("")
 
+    for e in sorted((e for e in report if e["status"] == "ok"), key=lambda e: e["sheet_number"]):
+        lines.append(f"\u2705 n\u00b0{e['sheet_number']} -> {e['eleve']} "
+                     f"({len(e['questions'])} question(s) lue(s))")
+
+    unknown = sorted(e["sheet_number"] for e in report if e["status"] == "numero_inconnu")
+    if unknown:
+        numbers = ", ".join(f"n\u00b0{n}" for n in unknown)
+        lines.append(f"\u2753 Numéro(s) inconnu(s) (absent(s) du tableau) : {numbers}")
+
+    doubtful = sorted((e for e in report if e["status"] == "feuille_douteuse"), key=lambda e: e["sheet_number"])
+    if doubtful:
+        entries = ", ".join(f"n\u00b0{e['sheet_number']} ({e['eleve']})" for e in doubtful)
+        lines.append(f"\u26a0\ufe0f Feuille(s) sans séparation nette, à corriger à la main : {entries}")
+
+    missing = sorted((e for e in report if e["status"] == "face_manquante"), key=lambda e: e["sheet_number"])
+    if missing:
+        entries = ", ".join(
+            f"n\u00b0{e['sheet_number']} "
+            f"({'/'.join('recto' if s == 0 else 'verso' for s in e['missing_sides'])})"
+            for e in missing)
+        lines.append(f"\U0001f4c4 Face(s) manquante(s) : {entries}")
+
+    errors_by_message = {}
     for e in report:
-        if e["status"] == "ok":
-            lines.append(f"\u2705 n\u00b0{e['sheet_number']} -> {e['eleve']} "
-                         f"({len(e['questions'])} question(s) lue(s))")
-        elif e["status"] == "numero_inconnu":
-            lines.append(f"\u2753 n\u00b0{e['sheet_number']} -> AUCUN ÉLÈVE CORRESPONDANT "
-                         f"dans le tableau (voir {e['identity_crop_path']})")
-        elif e["status"] == "feuille_douteuse":
-            lines.append(f"\u26a0\ufe0f n\u00b0{e['sheet_number']} ({e['eleve']}) -> feuille sans "
-                         f"séparation nette, à corriger à la main "
-                         f"(voir {e['identity_crop_path']})")
-        elif e["status"] == "face_manquante":
-            faces = ", ".join("recto" if s == 0 else "verso" for s in e["missing_sides"])
-            lines.append(f"\U0001f4c4 n\u00b0{e['sheet_number']} -> face(s) manquante(s) : {faces} "
-                         f"(voir {e['identity_crop_path']})")
-        else:
-            lines.append(f"\u274c {e['source']} -> erreur de lecture : {e['erreur']}")
+        if e["status"] == "erreur_lecture":
+            errors_by_message.setdefault(e["erreur"], []).append(os.path.basename(e["source"]))
+    for message, filenames in errors_by_message.items():
+        lines.append(f"\u274c {message} : {', '.join(sorted(filenames))}")
 
     return "\n".join(lines)
