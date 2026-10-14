@@ -2052,10 +2052,16 @@ class ScanTab(ScrollableTab):
         rather than at the bottom of this tab: on a batch of several
         dozen copies, the table didn't fit in the main window and went
         out of view. Closing this window only hides it (it keeps its
-        content); 'View results…' reopens it."""
+        content); 'View results…' reopens it.
+
+        Always raised to the front before returning (see the end of this
+        method) -- called automatically once a correction finishes (see
+        ScanTab._on_run) or an archived one is loaded, precisely so the
+        results actually appear in front of the teacher rather than
+        needing a manual 'Voir les résultats…' click to notice they're
+        ready."""
         if self.results_win is not None and self.results_win.winfo_exists():
-            self.results_win.deiconify()
-            self.results_win.lift()
+            self._raise_results_window()
             return
 
         win = tk.Toplevel(self)
@@ -2116,6 +2122,17 @@ class ScanTab(ScrollableTab):
                   background="#ffcc66", padding=(6, 3)).pack(anchor="w", padx=10, pady=(0, 10))
 
         self._populate_tree()
+        self._raise_results_window()
+
+    def _raise_results_window(self):
+        """deiconify() alone (restoring a withdrawn/minimized window)
+        doesn't reliably bring it to the front of other windows on every
+        platform -- lift() + focus_force() do, which is what actually
+        makes the results appear automatically rather than silently
+        opening behind whatever else is on screen."""
+        self.results_win.deiconify()
+        self.results_win.lift()
+        self.results_win.focus_force()
 
     def _set_summary(self, text):
         self.summary_text.config(state="normal")
@@ -2489,6 +2506,22 @@ class ScanTab(ScrollableTab):
         app_config.save_settings(s)
         self._populate_tree()
 
+    def _persist_report(self):
+        """Re-writes this run's archived resultats.csv + report.json
+        (see class_archive.py) from the current self.report, so a manual
+        correction made via DetailDialog/ManualEntryDialog ("Enregistrer")
+        actually survives -- previously it only updated self.report in
+        memory, so reopening the same correction later (e.g. from
+        Gestion des données) silently showed the ORIGINAL, uncorrected
+        answers again. A no-op if these results aren't tied to an
+        archived run yet (shouldn't happen in practice: both a fresh
+        correction and a loaded archived one always set these)."""
+        if not self.last_archive_classe or not self.last_run_name:
+            return
+        headers, rows = build_results_csv_rows(self.report, self.note_out_of_20_var.get())
+        class_archive.save_results(self.last_archive_classe, self.last_run_name, headers, rows)
+        class_archive.save_report_json(self.last_archive_classe, self.last_run_name, self.report)
+
     def _on_row_double_click(self, event):
         sel = self.tree.selection()
         if not sel:
@@ -2501,6 +2534,7 @@ class ScanTab(ScrollableTab):
             if self.answer_key:
                 scoring.rescore_entry(updated_entry, self.answer_key)
             self._populate_tree()
+            self._persist_report()
 
         if entry.get("status") == "erreur_lecture":
             default_n_q = self.settings.get("n_questions", 12)
