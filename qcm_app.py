@@ -1989,6 +1989,16 @@ class ScanTab(ScrollableTab):
             side="left", padx=5)
         ttk.Label(rotate_row, text=tr("scan_rotate_hint"), foreground="#555555").pack(side="left", padx=(10, 0))
 
+        rv_row = ttk.Frame(photos_frame)
+        rv_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(rv_row, text=tr("scan_rv_label")).pack(side="left")
+        ttk.Button(rv_row, text=tr("scan_ignore_rectos"), command=self._ignore_rectos).pack(
+            side="left", padx=5)
+        ttk.Button(rv_row, text=tr("scan_ignore_versos"), command=self._ignore_versos).pack(
+            side="left", padx=5)
+        ttk.Label(rv_row, text=tr("scan_rv_hint"), foreground="#555555", wraplength=600,
+                  justify="left").pack(side="left", padx=(10, 0))
+
         # List on the left, preview on the right: selecting a photo (click
         # or arrow keys) shows it immediately at a size meant to at least
         # read the handwritten class on the sheet, without having to open
@@ -2271,19 +2281,48 @@ class ScanTab(ScrollableTab):
 
         run_in_background(self, work, on_done)
 
-    def _remove_selected_photos(self):
-        removed = {self.photos_list.get(idx) for idx in self.photos_list.curselection()}
-        for idx in reversed(self.photos_list.curselection()):
+    def _remove_photo_indices(self, indices):
+        """Deletes the given listbox indices (any iterable, any order)
+        and keeps photo_rotations/the preview consistent -- shared by
+        "Retirer la sélection" and the recto/verso-skipping buttons
+        below, which only differ in which indices they pick."""
+        indices = sorted(set(indices))
+        removed = {self.photos_list.get(idx) for idx in indices}
+        for idx in reversed(indices):
             self.photos_list.delete(idx)
         for path in removed:
             self.photo_rotations.pop(path, None)
         if self._preview_image_path in removed:
             self._clear_preview()
 
+    def _remove_selected_photos(self):
+        self._remove_photo_indices(self.photos_list.curselection())
+
     def _clear_photos(self):
         self.photos_list.delete(0, "end")
         self.photo_rotations.clear()
         self._clear_preview()
+
+    # -- Recto/verso ----------------------------------------------------
+    def _ignore_rectos(self):
+        """Removes every RECTO page (1st, 3rd, 5th... in the list's
+        current order, 0-based indices 0, 2, 4...), for a duplex-scanned
+        PDF/photo batch where only the verso side actually has a grid to
+        read -- see _ignore_versos for the mirror case."""
+        n = self.photos_list.size()
+        if n == 0:
+            messagebox.showwarning(APP_TITLE, tr("scan_rv_empty_list"))
+            return
+        self._remove_photo_indices(range(0, n, 2))
+
+    def _ignore_versos(self):
+        """Removes every VERSO page (2nd, 4th, 6th... 0-based indices 1,
+        3, 5...) -- see _ignore_rectos."""
+        n = self.photos_list.size()
+        if n == 0:
+            messagebox.showwarning(APP_TITLE, tr("scan_rv_empty_list"))
+            return
+        self._remove_photo_indices(range(1, n, 2))
 
     # -- Rotation -------------------------------------------------------
     def _rotate_selected(self, delta):

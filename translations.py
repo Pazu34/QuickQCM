@@ -269,6 +269,13 @@ TRANSLATIONS = {
         "scan_rotate_180": "Rotation 180°",
         "scan_rotate_hint": "N'affecte pas le fichier d'origine, appliqué seulement lors de la correction.",
         "scan_rotate_need_selection": "Sélectionne au moins une photo dans la liste pour la faire pivoter.",
+        "scan_rv_label": "Recto/verso :",
+        "scan_ignore_rectos": "Ignorer les rectos",
+        "scan_ignore_versos": "Ignorer les versos",
+        "scan_rv_hint": ("Retire une page sur deux selon l'ordre actuel de la liste (1ère = recto, "
+                          "2e = verso, etc.) — utile si un PDF scanné recto-verso n'a la grille que "
+                          "d'un seul côté."),
+        "scan_rv_empty_list": "La liste de photos est vide.",
         "scan_define_key": "Définir le corrigé (facultatif)…",
         "scan_key_undefined": "Corrigé : non défini (pas de notation)",
         "scan_key_defined": "Corrigé : défini ({n} question(s) notée(s), {total} point(s) au total)",
@@ -591,6 +598,12 @@ TRANSLATIONS = {
         "scan_rotate_180": "Rotate 180°",
         "scan_rotate_hint": "Doesn't affect the original file, only applied when running the grading.",
         "scan_rotate_need_selection": "Select at least one photo in the list to rotate it.",
+        "scan_rv_label": "Front/back:",
+        "scan_ignore_rectos": "Skip front pages",
+        "scan_ignore_versos": "Skip back pages",
+        "scan_rv_hint": ("Removes every other page based on the list's current order (1st = front, 2nd = "
+                          "back, etc.) — handy when a duplex-scanned PDF only has the grid on one side."),
+        "scan_rv_empty_list": "The photo list is empty.",
         "scan_define_key": "Set the answer key (optional)…",
         "scan_key_undefined": "Answer key: not set (no grading)",
         "scan_key_defined": "Answer key: set ({n} question(s) graded, {total} point(s) total)",
@@ -910,6 +923,13 @@ TRANSLATIONS = {
         "scan_rotate_180": "Um 180° drehen",
         "scan_rotate_hint": "Ändert nicht die Originaldatei, wird erst bei der Korrektur angewendet.",
         "scan_rotate_need_selection": "Wähle mindestens ein Foto in der Liste aus, um es zu drehen.",
+        "scan_rv_label": "Vorder-/Rückseite:",
+        "scan_ignore_rectos": "Vorderseiten überspringen",
+        "scan_ignore_versos": "Rückseiten überspringen",
+        "scan_rv_hint": ("Entfernt jede zweite Seite in der aktuellen Listenreihenfolge (1. = Vorderseite, "
+                          "2. = Rückseite usw.) — nützlich, wenn ein duplex-gescanntes PDF das Raster nur "
+                          "auf einer Seite hat."),
+        "scan_rv_empty_list": "Die Fotoliste ist leer.",
         "scan_define_key": "Lösung festlegen (optional)…",
         "scan_key_undefined": "Lösung: nicht festgelegt (keine Bewertung)",
         "scan_key_defined": "Lösung: festgelegt ({n} Frage(n) bewertet, {total} Punkt(e) insgesamt)",
@@ -1230,6 +1250,13 @@ TRANSLATIONS = {
         "scan_rotate_180": "Girar 180°",
         "scan_rotate_hint": "No afecta al archivo original, solo se aplica al iniciar la corrección.",
         "scan_rotate_need_selection": "Selecciona al menos una foto en la lista para girarla.",
+        "scan_rv_label": "Anverso/reverso:",
+        "scan_ignore_rectos": "Omitir los anversos",
+        "scan_ignore_versos": "Omitir los reversos",
+        "scan_rv_hint": ("Elimina una página de cada dos según el orden actual de la lista (1.ª = anverso, "
+                          "2.ª = reverso, etc.) — útil si un PDF escaneado a doble cara solo tiene la "
+                          "cuadrícula en un lado."),
+        "scan_rv_empty_list": "La lista de fotos está vacía.",
         "scan_define_key": "Definir la solución (opcional)…",
         "scan_key_undefined": "Solución: no definida (sin calificación)",
         "scan_key_defined": "Solución: definida ({n} pregunta(s) calificada(s), {total} punto(s) en total)",
