@@ -4,3 +4,4 @@ numpy
 pymupdf
 Pillow
 sv-ttk
+customtkinter  # branche prototype-customtkinter-ui uniquement, voir PROTOTYPE_README.md
