@@ -3126,12 +3126,23 @@ def main():
     root = tk.Tk()
     _size_window_to_screen(root)
 
+    # Sun Valley (sv_ttk) gives a flat, Windows 11-style look -- a big
+    # step up from the dated "vista"/classic ttk themes, and a drop-in
+    # swap since it's still plain ttk underneath (every existing widget,
+    # color and layout in this file keeps working unchanged). Falls back
+    # to the old "vista" theme if sv_ttk isn't installed for some reason
+    # (e.g. a dev environment that hasn't run `pip install -r
+    # requirements.txt` yet) rather than failing to start.
     try:
-        style = ttk.Style()
-        if "vista" in style.theme_names():
-            style.theme_use("vista")
-    except tk.TclError:
-        pass
+        import sv_ttk
+        sv_ttk.set_theme("light")
+    except ImportError:
+        try:
+            style = ttk.Style()
+            if "vista" in style.theme_names():
+                style.theme_use("vista")
+        except tk.TclError:
+            pass
 
     header = ttk.Frame(root, padding=(12, 10, 12, 0))
     header.pack(fill="x")

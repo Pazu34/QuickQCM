@@ -26,6 +26,7 @@ jobs:
         run: >
           pyinstaller --onefile --windowed --name QCM_Scanner
           --hidden-import=PIL._tkinter_finder
+          --collect-data sv_ttk
           qcm_app.py
 
       - name: Assemble portable folder
